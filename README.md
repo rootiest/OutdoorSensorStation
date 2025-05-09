@@ -173,7 +173,19 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 
 ## ✅ Conclusion
 
-- System is **highly energy efficient**
-- A **single 5V 200mA panel** and **3000mAh battery** are **more than enough**
-- Even with PMS5003, the design remains **solar-sustainable**
-- Power draw is **well within ESP32-C3 GPIO limits**, so **no external MOSFETs required**
+- The system is **extremely energy efficient** in typical operation
+  (~16–17mAh/day), easily supported by a 3000mAh battery.
+- A **single 5V 200mA solar panel** can fully offset even the
+  highest power use case (~280mAh/day) with just **1.5 hours of sunlight/day**.
+- The design remains **solar-sustainable year-round**, including
+  during **cold winter conditions** with heater usage.
+- A **low-power PTC heater** and internal **TMP102 temperature sensor**
+  allow safe LiPo and PMS5003 operation below freezing.
+- The OLED display is manually activated and powered via MOSFET,
+  avoiding idle drain and preserving battery life.
+- All components are powered efficiently via GPIO-controlled switches,
+  using **MOSFETs** to manage loads above safe GPIO sourcing limits.
+- All necessary functionality—including sensors,
+  power switches, UART, and buttons—was
+  achieved using the ESP32-C3 SuperMini's onboard GPIOs,
+  with **no GPIO expander required**.
