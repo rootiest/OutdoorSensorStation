@@ -1,5 +1,26 @@
 # Solar-Powered Sensor Station
 
+## 📚 Table of Contents
+
+- [🧰 Parts List](#-parts-list)
+- [ESPHome Configuration](#esphome-configuration)
+- [⚡ Daily Energy Use Summary](#-daily-energy-use-summary)
+  - [Base System (5-minute wake cycle)](#base-system-5-minute-wake-cycle)
+  - [With PMS5003 Included](#with-pms5003-included)
+  - [With OLED Usage](#with-oled-usage-occasional-manual-activation)
+- [☀️ Solar Power Summary](#-solar-power-summary)
+  - [🔋 + ☀️ Battery Backup & Solar Requirements](#--battery-backup--solar-requirements)
+- [ESP32-C3 SuperMini GPIO Pinout Plan](#esp32-c3-supermini-gpio-pinout-plan)
+- [🧾 Bill of Materials (BOM Summary)](#-bill-of-materials-bom-summary)
+  - [Microcontroller & Power](#microcontroller--power)
+  - [Sensors](#sensors)
+  - [Display & Interface](#display--interface)
+  - [Power Management](#power-management)
+  - [Passive Components](#passive-components)
+  - [Optional Components](#optional-components)
+  - [Downloadable BOM Formats](#downloadable-bom-formats)
+- [✅ Conclusion](#-conclusion)
+
 ## 🧰 Parts List
 
 | Component                                  | Function                               | Idle Current         | Active Current               | Notes                                                |
