@@ -2,22 +2,26 @@
 
 ## 🧰 Parts List
 
-| Component                | Function                                       | Idle Current         | Active Current               | Notes                                                            |
-| ------------------------ | ---------------------------------------------- | -------------------- | ---------------------------- | ---------------------------------------------------------------- |
-| **ESP32-C3 SuperMini**   | Main MCU, Wi-Fi                                | ~0.01mA (deep sleep) | ~80–120mA (peak during WiFi) | ~20–30mA avg over wake time                                      |
-| **AHT20**                | Temp + Humidity                                | ~0.5mA               | ~1.0mA                       | Very low power                                                   |
-| **BMP280**               | Pressure                                       | ~0.5mA               | ~0.7mA                       | Combined board w/ AHT20                                          |
-| **SH1107 OLED (128x128)**| Visual output (I²C)                            | ~0.5mA (off or idle) | ~10–15mA (typical on)        | Display will be turned on briefly with button press              |
-| **TEMT6000**             | Ambient Light                                  | 0mA (powered off)    | ~0.5–1mA                     | Simple analog sensor                                             |
-| **HC-SR04**              | Ultrasonic distance                            | 0mA (powered off)    | ~15–20mA                     | Only on briefly to take reading                                  |
-| **2× INA219**            | Current/voltage monitor                        | ~0.6mA each          | ~1.0mA each                  | Continuously powered                                             |
-| **DS18B20**              | Waterproof temp (fish pond)                    | ~0.5mA               | ~1.5mA                       | Needs pull-up resistor                                           |
-| **PMS5003** *(optional)* | Air quality sensor                             | ~1.0mA (sleep)       | 100–120mA                    | Wakes ~5s per cycle                                              |
-| **CN3065**               | Solar charge controller                        | Negligible           | Passive device               | Handles charging logic                                           |
-| **5V 200mA Solar Panel** | Solar input                                    | N/A                  | 200mA max                    | One panel used                                                   |
-| **3000mAh LiPo Battery** | Power storage                                  | N/A                  | N/A                          | Powers the full system                                           |
-| **Resistor Kit**         | Pull-ups, misc use                             | N/A                  | N/A                          | 4.7kΩ used for I²C and DS18B20                                   |
-| **Capacitor Kit**        | Power stabilization (inrush current buffering) | N/A                  | N/A                          | Add 470–1000µF cap near ESP32 VIN; optional 0.1µF ceramic nearby |
+| Component                                  | Function                               | Idle Current         | Active Current               | Notes                                                |
+| ------------------------------------------ | -------------------------------------- | -------------------- | ---------------------------- | ---------------------------------------------------- |
+| **ESP32-C3 SuperMini**                     | Main MCU, Wi-Fi                        | ~0.01mA (deep sleep) | ~80–120mA (peak during WiFi) | ~20–30mA avg over wake time                          |
+| **AHT20**                                  | Temp + Humidity                        | ~0.5mA               | ~1.0mA                       | Very low power                                       |
+| **BMP280**                                 | Pressure                               | ~0.5mA               | ~0.7mA                       | Combined board w/ AHT20                              |
+| **TMP102**                                 | Internal enclosure temperature monitor | ~10–50μA             | ~100μA max                   | I²C-based, very low-power                            |
+| **SH1107 OLED (128x128)**                  | Visual output (I²C)                    | ~0.5mA (off or idle) | ~10–15mA (typical on)        | Display will be turned on briefly with button press  |
+| **TEMT6000**                               | Ambient Light                          | 0mA (powered off)    | ~0.5–1mA                     | Simple analog sensor                                 |
+| **HC-SR04**                                | Ultrasonic distance                    | 0mA (powered off)    | ~15–20mA                     | Only on briefly to take reading                      |
+| **2× INA219**                              | Current/voltage monitor                | ~0.6mA each          | ~1.0mA each                  | Continuously powered                                 |
+| **DS18B20**                                | Waterproof temp (fish pond)            | ~0.5mA               | ~1.5mA                       | Needs pull-up resistor                               |
+| **PTC Heater (5V, 1W)**                    | Maintains safe temp in cold climates   | 0mA (off)            | ~200mA (when on)             | Controlled via GPIO + MOSFET                         |
+| **PMS5003** _(optional)_                   | Air quality sensor                     | ~1.0mA (sleep)       | 100–120mA                    | Wakes ~5s per cycle                                  |
+| **CN3065**                                 | Solar charge controller                | Negligible           | Passive device               | Handles charging logic                               |
+| **5V 200mA Solar Panel**                   | Solar input                            | N/A                  | 200mA max                    | One panel used                                       |
+| **3000mAh LiPo Battery**                   | Power storage                          | N/A                  | N/A                          | Powers the full system                               |
+| **2× STP55NF06L N-MOSFETs**                | Power switching (OLED, heater)         | 0mA                  | 0mA                          | Logic-level, TO-220, controlled by 3.3V GPIO         |
+| **3× 4.7kΩ Resistor (1/4W)**               | Pull-ups for SDA, SCL, and DS18B20     | N/A                  | N/A                          | 2 for I²C (SDA/SCL), 1 for DS18B20                   |
+| **100nF Ceramic Capacitor (50V)**          | High-frequency filtering near ESP32    | N/A                  | N/A                          | Place close to ESP32 power pin and sensor power rail |
+| **470µF Electrolytic Capacitor (6.3–10V)** | Bulk decoupling                        | N/A                  | N/A                          | Use near ESP32 VIN to buffer inrush currents         |
 
 ---
 
