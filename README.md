@@ -1,4 +1,4 @@
-# ESP32-C3 Sensor Station Parts List & Energy Summary
+# Solar-Powered Sensor Station
 
 ## 🧰 Parts List
 
