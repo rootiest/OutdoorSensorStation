@@ -4,17 +4,17 @@
 
 | Component                                  | Function                               | Idle Current         | Active Current               | Notes                                                |
 | ------------------------------------------ | -------------------------------------- | -------------------- | ---------------------------- | ---------------------------------------------------- |
-| **ESP32-C3 SuperMini**                     | Main MCU, Wi-Fi                        | ~0.01mA (deep sleep) | ~80–120mA (peak during WiFi) | ~20–30mA avg over wake time                          |
-| **AHT20**                                  | Temp + Humidity                        | ~0.5mA               | ~1.0mA                       | Very low power                                       |
-| **BMP280**                                 | Pressure                               | ~0.5mA               | ~0.7mA                       | Combined board w/ AHT20                              |
-| **TMP102**                                 | Internal enclosure temperature monitor | ~10–50μA             | ~100μA max                   | I²C-based, very low-power                            |
-| **SH1107 OLED (128x128)**                  | Visual output (I²C)                    | ~0.5mA (off or idle) | ~10–15mA (typical on)        | Display will be turned on briefly with button press  |
-| **TEMT6000**                               | Ambient Light                          | 0mA (powered off)    | ~0.5–1mA                     | Simple analog sensor                                 |
-| **HC-SR04**                                | Ultrasonic distance                    | 0mA (powered off)    | ~15–20mA                     | Only on briefly to take reading                      |
-| **2× INA219**                              | Current/voltage monitor                | ~0.6mA each          | ~1.0mA each                  | Continuously powered                                 |
-| **DS18B20**                                | Waterproof temp (fish pond)            | ~0.5mA               | ~1.5mA                       | Needs pull-up resistor                               |
-| **PTC Heater (5V, 1W)**                    | Maintains safe temp in cold climates   | 0mA (off)            | ~200mA (when on)             | Controlled via GPIO + MOSFET                         |
-| **PMS5003** _(optional)_                   | Air quality sensor                     | ~1.0mA (sleep)       | 100–120mA                    | Wakes ~5s per cycle                                  |
+| **ESP32-C3 SuperMini**                     | Main MCU, Wi-Fi                        | ≈0.01mA (deep sleep) | ≈80–120mA (peak during WiFi) | ≈20–30mA avg over wake time                          |
+| **AHT20**                                  | Temp + Humidity                        | ≈0.5mA               | ≈1.0mA                       | Very low power                                       |
+| **BMP280**                                 | Pressure                               | ≈0.5mA               | ≈0.7mA                       | Combined board w/ AHT20                              |
+| **TMP102**                                 | Internal enclosure temperature monitor | ≈10–50μA             | ≈100μA max                   | I²C-based, very low-power                            |
+| **SH1107 OLED (128x128)**                  | Visual output (I²C)                    | ≈0.5mA (off or idle) | ≈10–15mA (typical on)        | Display will be turned on briefly with button press  |
+| **TEMT6000**                               | Ambient Light                          | 0mA (powered off)    | ≈0.5–1mA                     | Simple analog sensor                                 |
+| **HC-SR04**                                | Ultrasonic distance                    | 0mA (powered off)    | ≈15–20mA                     | Only on briefly to take reading                      |
+| **2× INA219**                              | Current/voltage monitor                | ≈0.6mA each          | ≈1.0mA each                  | Continuously powered                                 |
+| **DS18B20**                                | Waterproof temp (fish pond)            | ≈0.5mA               | ≈1.5mA                       | Needs pull-up resistor                               |
+| **PTC Heater (5V, 1W)**                    | Maintains safe temp in cold climates   | 0mA (off)            | ≈200mA (when on)             | Controlled via GPIO + MOSFET                         |
+| **PMS5003** _(optional)_                   | Air quality sensor                     | ≈1.0mA (sleep)       | 100–120mA                    | Wakes ≈5s per cycle                                  |
 | **CN3065**                                 | Solar charge controller                | Negligible           | Passive device               | Handles charging logic                               |
 | **5V 200mA Solar Panel**                   | Solar input                            | N/A                  | 200mA max                    | One panel used                                       |
 | **3000mAh LiPo Battery**                   | Power storage                          | N/A                  | N/A                          | Powers the full system                               |
@@ -29,8 +29,8 @@
 
 ### Base System (5-minute wake cycle)
 
-- **ESP32-C3 (deep sleep)**: ~0.01mA × 23.6h ≈ **0.24mAh/day**
-- **ESP32-C3 (active)**: ~25mA avg × 5s per wake × 288 wakes = **10.0mAh/day**
+- **ESP32-C3 (deep sleep)**: ≈0.01mA × 23.6h ≈ **0.24mAh/day**
+- **ESP32-C3 (active)**: ≈25mA avg × 5s per wake × 288 wakes = **10.0mAh/day**
 - **Sensors (active during wake)**:
   - AHT20/BMP280, HC-SR04, DS18B20, INA219s, TMP102, etc.  
     ≈ **15.05mA combined** × 5s × 288 = **6.01mAh/day**
@@ -38,16 +38,16 @@
 - **OLED (off by default)**: **0mAh/day** (fully unpowered unless activated manually)
 
 - **Subtotal without PMS5003 or OLED usage**:  
-  → **~16.25mAh/day**
+  → **≈16.25mAh/day**
 
 ---
 
 ### With PMS5003 Included
 
-- **PMS5003 sleep**: ~1mA × 24h = **24mAh/day**
-- **PMS5003 active**: ~100mA × 5s × 288 = **40mAh/day**
+- **PMS5003 sleep**: ≈1mA × 24h = **24mAh/day**
+- **PMS5003 active**: ≈100mA × 5s × 288 = **40mAh/day**
 - **New total with PMS5003**:  
-  → **~80.05mAh/day**
+  → **≈80.05mAh/day**
 
 ---
 
@@ -58,10 +58,10 @@ Assuming:
 - OLED on for 15s × 10 button presses per day
 - OLED draw ≈ 12mA
 
-→ 12mA × (15s × 10) / 3600s = **~0.5mAh/day**
+→ 12mA × (15s × 10) / 3600s = **≈0.5mAh/day**
 
 - **Base system + TMP102 + OLED use**:  
-  → **~16.75mAh/day**
+  → **≈16.75mAh/day**
 
 ---
 
@@ -69,7 +69,7 @@ Assuming:
 
 - **Panel Output**: 5V @ 200mA
 - **Estimated good sunlight**: 4h/day
-- **Daily energy input**: ~800mAh raw, ~400mAh effective
+- **Daily energy input**: ≈800mAh raw, ≈400mAh effective
 - **Conclusion**: More than sufficient to offset daily usage,
   even in winter/cloudy days
 
@@ -81,14 +81,14 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 
 | Scenario                | Daily Draw | Backup Days | Solar Required | Sun Hours Needed   |
 | ----------------------- | ---------- | ----------- | -------------- | ------------------ |
-| Base system only        | ~16.25mAh  | ~184 days   | ~16.25mAh      | ~0.08 hr (~5 min)  |
-| With OLED use           | ~16.75mAh  | ~179 days   | ~16.75mAh      | ~0.08 hr           |
-| With PMS5003            | ~80.05mAh  | ~37 days    | ~80.05mAh      | ~0.40 hr (~24 min) |
-| PMS5003 + OLED use      | ~80.55mAh  | ~37 days    | ~80.55mAh      | ~0.40 hr           |
-| Base system + heater    | ~216.25mAh | ~13.9 days  | ~216.25mAh     | ~1.08 hr           |
-| OLED + heater           | ~216.75mAh | ~13.8 days  | ~216.75mAh     | ~1.08 hr           |
-| PMS5003 + heater        | ~280.05mAh | ~10.7 days  | ~280.05mAh     | ~1.40 hr           |
-| PMS5003 + OLED + heater | ~280.55mAh | ~10.7 days  | ~280.55mAh     | ~1.40 hr           |
+| Base system only        | ≈16.25mAh  | ≈184 days   | ≈16.25mAh      | ≈0.08 hr (≈5 min)  |
+| With OLED use           | ≈16.75mAh  | ≈179 days   | ≈16.75mAh      | ≈0.08 hr           |
+| With PMS5003            | ≈80.05mAh  | ≈37 days    | ≈80.05mAh      | ≈0.40 hr (≈24 min) |
+| PMS5003 + OLED use      | ≈80.55mAh  | ≈37 days    | ≈80.55mAh      | ≈0.40 hr           |
+| Base system + heater    | ≈216.25mAh | ≈13.9 days  | ≈216.25mAh     | ≈1.08 hr           |
+| OLED + heater           | ≈216.75mAh | ≈13.8 days  | ≈216.75mAh     | ≈1.08 hr           |
+| PMS5003 + heater        | ≈280.05mAh | ≈10.7 days  | ≈280.05mAh     | ≈1.40 hr           |
+| PMS5003 + OLED + heater | ≈280.55mAh | ≈10.7 days  | ≈280.55mAh     | ≈1.40 hr           |
 
 ---
 
@@ -174,9 +174,9 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 ## ✅ Conclusion
 
 - The system is **extremely energy efficient** in typical operation
-  (~16–17mAh/day), easily supported by a 3000mAh battery.
+  (≈16–17mAh/day), easily supported by a 3000mAh battery.
 - A **single 5V 200mA solar panel** can fully offset even the
-  highest power use case (~280mAh/day) with just **1.5 hours of sunlight/day**.
+  highest power use case (≈280mAh/day) with just **1.5 hours of sunlight/day**.
 - The design remains **solar-sustainable year-round**, including
   during **cold winter conditions** with heater usage.
 - A **low-power PTC heater** and internal **TMP102 temperature sensor**
