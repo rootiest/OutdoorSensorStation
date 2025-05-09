@@ -1,0 +1,28 @@
+Component,Function,Quantity,Notes
+ESP32-C3 SuperMini,Main MCU,1,
+CN3065,Solar charging controller,1,
+3000mAh LiPo Battery,Power storage,1,
+5V 200mA Solar Panel,Solar input,1,
+AHT20 + BMP280,Temp/Humidity/Pressure (I²C combo board),1,
+TMP102,Internal enclosure temp (I²C),1,
+DS18B20,Waterproof temp (1-Wire),1,
+TEMT6000,Ambient light (analog),1,
+HC-SR04,Ultrasonic distance sensor,1,
+INA219,Current/voltage monitoring (I²C),2,
+PMS5003,Air quality sensor (UART),1,Optional
+SH1107 OLED 128x128,I²C display,1,
+Momentary Button,OLED activation,1,
+PTC Heater (5V, 1W),Thermal protection in cold,1,
+STP55NF06L N-MOSFET,Power switch for OLED/heater,2,Logic-level TO-220
+4.7kΩ Resistor (1/4W),I²C + DS18B20 pull-ups,3,2 for SDA/SCL, 1 for DS18B20
+470µF Electrolytic Capacitor,Bulk decoupling near ESP32,1,6.3V+
+100nF Ceramic Capacitor,High-frequency filter near power input,1,50V+
+
+Assorted Hookup Wires,Connections,varies,Optional
+Perfboard or Custom PCB,Component mounting,1,Optional
+Connectors (JST/Dupont/etc),Modular cabling,varies,Optional
+Heat-shrink or sleeving,Cable insulation,varies,Optional
+Mounting Hardware,Case assembly,varies,Optional
+3D-Printed or Waterproof Case,Enclosure,1,Optional
+Heatsink Pad or Thermal Tape,PTC-to-battery thermal coupling,1,Optional
+GPIO Expander,Extra pins,1,Not currently used

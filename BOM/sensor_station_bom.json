@@ -1,0 +1,144 @@
+[
+    {
+        "component": "ESP32-C3 SuperMini",
+        "function": "Main MCU",
+        "quantity": 1
+    },
+    {
+        "component": "CN3065",
+        "function": "Solar charging controller",
+        "quantity": 1
+    },
+    {
+        "component": "3000mAh LiPo Battery",
+        "function": "Power storage",
+        "quantity": 1
+    },
+    {
+        "component": "5V 200mA Solar Panel",
+        "function": "Solar input",
+        "quantity": 1
+    },
+    {
+        "component": "AHT20 + BMP280",
+        "function": "Temp/Humidity/Pressure (I²C combo board)",
+        "quantity": 1
+    },
+    {
+        "component": "TMP102",
+        "function": "Internal enclosure temp (I²C)",
+        "quantity": 1
+    },
+    {
+        "component": "DS18B20",
+        "function": "Waterproof temp (1-Wire)",
+        "quantity": 1
+    },
+    {
+        "component": "TEMT6000",
+        "function": "Ambient light (analog)",
+        "quantity": 1
+    },
+    {
+        "component": "HC-SR04",
+        "function": "Ultrasonic distance sensor",
+        "quantity": 1
+    },
+    {
+        "component": "INA219",
+        "function": "Current/voltage monitoring (I²C)",
+        "quantity": 2
+    },
+    {
+        "component": "PMS5003",
+        "function": "Air quality sensor (UART)",
+        "quantity": 1,
+        "note": "Optional"
+    },
+    {
+        "component": "SH1107 OLED 128x128",
+        "function": "I²C display",
+        "quantity": 1
+    },
+    {
+        "component": "Momentary Button",
+        "function": "OLED activation",
+        "quantity": 1
+    },
+    {
+        "component": "PTC Heater (5V, 1W)",
+        "function": "Thermal protection in cold",
+        "quantity": 1
+    },
+    {
+        "component": "STP55NF06L N-MOSFET",
+        "function": "Power switch for OLED/heater",
+        "quantity": 2,
+        "note": "Logic-level TO-220"
+    },
+    {
+        "component": "4.7kΩ Resistor (1/4W)",
+        "function": "I²C + DS18B20 pull-ups",
+        "quantity": 3
+    },
+    {
+        "component": "470µF Electrolytic Capacitor",
+        "function": "Bulk decoupling near ESP32",
+        "quantity": 1,
+        "note": "6.3V or higher"
+    },
+    {
+        "component": "100nF Ceramic Capacitor",
+        "function": "High-frequency filter near power input",
+        "quantity": 1,
+        "note": "50V or higher"
+    },
+    {
+        "component": "Assorted Hookup Wires",
+        "function": "Connections",
+        "quantity": "varies",
+        "note": "Optional"
+    },
+    {
+        "component": "Perfboard or Custom PCB",
+        "function": "Component mounting",
+        "quantity": 1,
+        "note": "Optional"
+    },
+    {
+        "component": "Connectors (JST/Dupont/etc)",
+        "function": "Modular cabling",
+        "quantity": "varies",
+        "note": "Optional"
+    },
+    {
+        "component": "Heat-shrink or sleeving",
+        "function": "Cable insulation",
+        "quantity": "varies",
+        "note": "Optional"
+    },
+    {
+        "component": "Mounting Hardware",
+        "function": "Case assembly",
+        "quantity": "varies",
+        "note": "Optional"
+    },
+    {
+        "component": "3D-Printed or Waterproof Case",
+        "function": "Enclosure",
+        "quantity": 1,
+        "note": "Optional"
+    },
+    {
+        "component": "Heatsink Pad or Thermal Tape",
+        "function": "PTC-to-battery thermal coupling",
+        "quantity": 1,
+        "note": "Optional"
+    },
+    {
+        "component": "GPIO Expander",
+        "function": "Extra pins",
+        "quantity": 1,
+        "note": "Not currently used"
+    }
+]
