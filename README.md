@@ -25,6 +25,15 @@
 
 ---
 
+## ESPHome Configuration
+
+[YAML configuration for the Sensor Station](ESPHome/sensor_station.yml)
+
+This will configure the ESPHome firmware for the sensor station.
+
+See [ESPHome documentation](https://esphome.io/) for more details
+on how to set up and use ESPHome.
+
 ## ⚡ Daily Energy Use Summary
 
 ### Base System (5-minute wake cycle)
