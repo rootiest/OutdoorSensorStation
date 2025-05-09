@@ -115,31 +115,61 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 
 ---
 
+### 🧾 Bill of Materials (BOM Summary)
 
+#### Microcontroller & Power
+
+- 1× ESP32-C3 SuperMini
+- 1× CN3065 Solar Charging Module
+- 1× 3000mAh LiPo Battery
+- 1× 5V 200mA Solar Panel
+
+#### Sensors
+
+- 1× AHT20 + BMP280 (combined I²C PCB)
+- 1× TMP102 (I²C internal temp)
+- 1× DS18B20 (1-Wire, waterproof)
+- 1× TEMT6000 (analog light sensor)
+- 1× HC-SR04 (ultrasonic distance)
+- 2× INA219 (voltage/current monitoring)
+- 1× PMS5003 (air quality sensor, optional)
+
+#### Display & Interface
+
+- 1× SH1107 OLED Display (128x128 I²C)
+- 1× Momentary button (for OLED activation)
+
+#### Power Management
+
+- 1× PTC Heater (5V, 1W)
+- 2× STP55NF06L N-MOSFETs (OLED + Heater switching)
+
+#### Passive Components
+
+- 3× 4.7kΩ Resistors (1/4W)
+  - 2 for I²C pull-ups (SDA + SCL shared across all I²C devices)
+  - 1 for DS18B20 1-Wire pull-up
+- 1× 470µF Electrolytic Capacitor (≥6.3V) – Bulk decoupling (for ESP32 VIN)
+- 1× 100nF Ceramic Capacitor (≥50V) – High-frequency filtering
+  (ESP32 + sensor power rails)
+
+#### Optional Components
+
+- Assorted hookup wires (solid or stranded) for interconnections
+- Custom PCB or perfboard for permanent soldered assembly
+- Connectors (e.g. JST-PH, JST-XH, Dupont, terminal blocks) for modular assembly
+- Heat-shrink tubing or silicone wire sleeving for strain relief
+- Mounting hardware or standoffs for enclosure assembly
+- 1× 3D-printed or waterproof case
+- 1× Heatsink pad or thermal tape (for PTC heater to LiPo)
+- 1× GPIO expander (not needed in current design)
 
 ---
-### ESP32-C3 SuperMini GPIO Pinout Plan
 
-| Purpose                      | GPIO   | Notes                                                    |
-| ---------------------------- | ------ | -------------------------------------------------------- |
-| **5V**                       | ----   | 5V Rail                                                  |
-| **GND**                      | ----   | Ground Plane                                             |
-| **3V3**                      | ----   | 3.3V Rail                                                |
-| **I²C SDA (AHT20/BMP280)**   | GPIO4  | Shared I²C bus                                           |
-| **I²C SCL (AHT20/BMP280)**   | GPIO5  | Shared I²C bus                                           |
-| **1-Wire (DS18B20)**         | GPIO6  | Needs 4.7kΩ pull-up resistor                             |
-| **Sensor power switch**      | GPIO2  | MOSFET-controlled rail for sensors                       |
-| **HC-SR04 Trigger**          | GPIO10 | -                                                        |
-| **HC-SR04 Echo**             | GPIO3  | -                                                        |
-| **PMS5003 TX → RX**          | GPIO21 | UART receive from PMS5003                                |
-| **PMS5003 RX ← TX**          | GPIO20 | UART send to PMS5003                                     |
-| **PMS5003 SET (Sleep Ctrl)** | GPIO1  | Drive LOW to enter PMS sleep mode                        |
-| **TEMT6000 (Analog Out)**    | GPIO0  | Analog read (ADC1), safe and accessible                  |
-| **OLED Power (MOSFET Gate)** | GPIO7  | Drives N-MOSFET to power OLED                            |
-| **OLED Button Input**        | GPIO9  | Safe as input only; must be HIGH or float at boot        |
-| **UNUSED**                   | GPIO8  | Safe as input only; must be HIGH at reset                |
+#### Downloadable BOM Formats
 
----
+- [CSV](BOM/sensor_station_bom.csv)
+- [JSON](BOM/sensor_station_bom.json)
 
 ## ✅ Conclusion
 
