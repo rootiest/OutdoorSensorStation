@@ -31,8 +31,9 @@ i2c:
   scl: GPIO5
   scan: true
 
-# ADC for TEMT6000 ambient light sensor
+# Configure sensors
 sensor:
+  # ADC for TEMT6000 ambient light sensor
   - platform: adc
     pin: GPIO0
     name: "Ambient Light"
@@ -70,26 +71,29 @@ sensor:
   # INA219 voltage/current sensors
   # Solar Power Supply
   - platform: ina219
-    address: 0x40 # Adjust as needed
+    address: 0x40
     shunt_resistance: 0.1 ohm
     current:
-      name: "Solar Panel Current"
-    voltage:
-      name: "Solar Panel Voltage"
+      name: "Solar Current"
+      id: solar_current
     power:
-      name: "Solar Panel Power"
+      name: "Solar Power"
+      id: solar_power
+    bus_voltage:
+      name: "Solar Voltage"
+      id: solar_voltage
     update_interval: 5s
 
-    # Station Power Drain
+    # Battery Power Supply/Charging
   - platform: ina219
-    address: 0x41 # Adjust as needed
+    address: 0x41
     shunt_resistance: 0.1 ohm
     current:
-      name: "Station Current"
+      name: "Battery Current"
     voltage:
-      name: "Station Voltage"
+      name: "Battery Voltage"
     power:
-      name: "Station Power"
+      name: "Battery Power"
     update_interval: 5s
 
   # PMS5003 Particulate Matter Sensor
@@ -119,6 +123,51 @@ sensor:
       return sensor_height - id(water_distance).state;
     unit_of_measurement: "cm"
     update_interval: 5s
+
+  # Template to calculate System Power
+  - platform: template
+    name: "Estimated Total Power Use"
+    id: total_power_use
+    unit_of_measurement: "W"
+    accuracy_decimals: 2
+    update_interval: 5s
+    lambda: |-
+      return (id(solar_voltage).state * id(solar_current).state) -
+             (id(batt_voltage).state * id(batt_current).state);
+
+  # Daily total energy usage (resets every day)
+  - platform: total_daily_energy
+    name: "Total Energy Used Today"
+    power_id: total_power_use
+    unit_of_measurement: "Wh"
+    accuracy_decimals: 2
+    restore: true
+
+  # Lifetime total energy usage (never resets)
+  - platform: integration
+    name: "Total Energy Used (All-Time)"
+    sensor: total_power_use
+    time_unit: h
+    unit_of_measurement: "Wh"
+    accuracy_decimals: 2
+    restore: true
+
+  # Daily solar charge (resets every day)
+  - platform: total_daily_energy
+    name: "Solar Energy Collected Today"
+    power_id: solar_power
+    unit_of_measurement: "Wh"
+    accuracy_decimals: 2
+    restore: true
+
+  # Lifetime solar charge (never resets)
+  - platform: integration
+    name: "Solar Energy Collected (All-Time)"
+    sensor: solar_power
+    time_unit: h
+    unit_of_measurement: "Wh"
+    accuracy_decimals: 2
+    restore: true
 
 # Dallas 1-wire setup
 dallas:
