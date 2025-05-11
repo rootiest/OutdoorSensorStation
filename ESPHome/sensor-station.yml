@@ -124,6 +124,20 @@ sensor:
     unit_of_measurement: "cm"
     update_interval: 5s
 
+    # Template to calculate battery charge percentage
+  - platform: template
+    name: "Battery Percentage"
+    id: batt_percent
+    unit_of_measurement: "%"
+    device_class: battery
+    update_interval: 5s
+    accuracy_decimals: 0
+    lambda: |-
+      float v = id(batt_voltage).state;
+      if (v >= 4.2) return 100;
+      if (v <= 3.2) return 0;
+      return (v - 3.2) * 100.0 / (4.2 - 3.2);
+
   # Template to calculate System Power
   - platform: template
     name: "Estimated Total Power Use"
