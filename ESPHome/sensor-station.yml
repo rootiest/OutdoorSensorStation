@@ -232,17 +232,25 @@ uart:
   baud_rate: 9600
 
 switch:
-  # Heater (PTC) control via GPIO8 through MOSFET
-  - platform: gpio
-    pin: GPIO8
-    name: "PTC Heater"
-    id: ptc_heater
-
   # Virtual switch to enable wake-lock (for OTA updates)
   - platform: template
     name: "Wake-Lock"
     id: wake_hold_switch
     restore_mode: RESTORE_DEFAULT_OFF
+
+    # Heater control via GPIO8 through MOSFET
+  - platform: gpio
+    pin: GPIO8
+    name: "Internal Heater"
+    id: internal_heater
+
+# Heater safety timeout
+script:
+  - id: heater_timeout_guard
+    mode: restart
+    then:
+      - delay: 10min
+      - switch.turn_off: internal_heater
 
 # Automatic heater activation based on internal temp
 climate:
@@ -253,9 +261,10 @@ climate:
     default_target_temperature_low: 2°C
     default_target_temperature_high: 5°C
     heat_action:
-      - switch.turn_on: ptc_heater
+      - switch.turn_on: internal_heater
+      - script.execute: heater_timeout_guard
     idle_action:
-      - switch.turn_off: ptc_heater
+      - switch.turn_off: internal_heater
 
 #   ─────────────────────────────── DISPLAY ─────────────────────────────
 
