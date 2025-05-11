@@ -231,17 +231,62 @@ uart:
   tx_pin: GPIO20
   baud_rate: 9600
 
-# OLED display configuration
+switch:
+  # Heater (PTC) control via GPIO8 through MOSFET
+  - platform: gpio
+    pin: GPIO8
+    name: "PTC Heater"
+    id: ptc_heater
+
   # Virtual switch to enable wake-lock (for OTA updates)
   - platform: template
     name: "Wake-Lock"
     id: wake_hold_switch
     restore_mode: RESTORE_DEFAULT_OFF
 
+# Automatic heater activation based on internal temp
+climate:
+  - platform: thermostat
+    name: "Enclosure Heater Control"
+    id: enclusure_heater_control
+    sensor: "Enclosure Internal Temp"
+    default_target_temperature_low: 2°C
+    default_target_temperature_high: 5°C
+    heat_action:
+      - switch.turn_on: ptc_heater
+    idle_action:
+      - switch.turn_off: ptc_heater
+
+#   ─────────────────────────────── DISPLAY ─────────────────────────────
+
+# Track display page
+globals:
+  - id: display_page
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+# Display page turn interval
+interval:
+  - interval: 3s
+    then:
+      - lambda: |-
+          id(display_page) = (id(display_page) + 1) % 2;
+
+# OLED display fonts
 font:
   - file: "fonts/Roboto-Regular.ttf"
     id: roboto
+    size: 16
+
+  - file: "fonts/arial.ttf"
+    id: font_small
     size: 12
+
+  - file: "fonts/arial.ttf"
+    id: font_large
+    size: 28
+    glyphs: [" ", "A", "C", "E", "K", "L", "O", "W"]
 
 # Display powered via GPIO7 through MOSFET
 output:
@@ -249,6 +294,7 @@ output:
     pin: GPIO7
     id: oled_power
 
+# Display activation button
 button:
   - platform: gpio
     pin:
@@ -260,21 +306,30 @@ button:
       - delay: 10s # Display timeout
       - output.turn_off: oled_power
 
-# Heater (PTC) control via GPIO8 through MOSFET
-switch:
-  - platform: gpio
-    pin: GPIO8
-    name: "PTC Heater"
-    id: ptc_heater
+# Display configuration
+display:
+  - platform: sh1107
+    model: "SH1107 128x128"
+    address: 0x3C
+    rotation: 0
+    lambda: |-
+      if (!id(oled_display_on)) return;
 
-# Automatic heater activation based on internal temp
-climate:
-  - platform: thermostat
-    name: "Enclosure Heater Control"
-    sensor: "Enclosure Internal Temp"
-    default_target_temperature_low: 2°C
-    default_target_temperature_high: 5°C
-    heat_action:
-      - switch.turn_on: ptc_heater
-    idle_action:
-      - switch.turn_off: ptc_heater
+      if (id(wake_hold_switch).state) {
+        it.printf(32, 34, id(font_large), "WAKE");
+        it.printf(32, 68, id(font_large), "LOCK");
+        return;
+      }
+
+      if (id(display_page) == 0) {
+        it.printf(0, 0, id(font_small), "Temp: %.1f°C", id(ambient_temp).state);
+        it.printf(0, 14, id(font_small), "Hum:  %.0f%%", id(ambient_humidity).state);
+        it.printf(0, 28, id(font_small), "IntTemp: %.1f°C", id(enclosure_temp).state);
+        it.printf(0, 42, id(font_small), "Batt: %.0f%%", id(batt_percent).state);
+        it.printf(0, 56, id(font_small), "Solar: %.1fW", id(solar_power).state);
+      } else {
+        it.printf(0, 0, id(font_small), "Light: %.0f", id(ambient_light).state);
+        it.printf(0, 14, id(font_small), "Pressure: %.0f hPa", id(atmospheric_pressure).state);
+        it.printf(0, 28, id(font_small), "Pond Temp: %.1f°C", id(pond_temp).state);
+        it.printf(0, 42, id(font_small), "Water Depth: %.0fcm", id(water_level).state);
+      }
