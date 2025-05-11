@@ -55,6 +55,44 @@ This will configure the ESPHome firmware for the sensor station.
 See [ESPHome documentation](https://esphome.io/) for more details
 on how to set up and use ESPHome.
 
+## 📡 ESPHome Sensor Station Entities
+
+### 🌡️ Environmental Sensors
+
+- Ambient Light
+- Ambient Temperature
+- Ambient Humidity
+- BMP280 Temperature
+- Atmospheric Pressure
+- Enclosure Internal Temp
+- Pond Water Temperature
+- Water Level Distance
+
+### ⚡ Power & Energy Monitoring
+
+- Estimated Total Power Use
+- Battery Voltage
+- Battery Current
+- Battery Power
+- Solar Voltage
+- Solar Current
+- Solar Power
+- Total Energy Used Today (daily cumulative)
+- Total Energy Used (All-Time) (lifetime cumulative)
+- Solar Energy Collected Today (daily cumulative)
+
+### 📶 WiFi Signal Strength
+
+- WiFi Signal dB (signal strength in decibels)
+- WiFi Signal Percent (signal strength percentage)
+
+### 🎛️ Switches & Buttons
+
+- OLED Display Activation (button to activate OLED display temporarily)
+- PTC Heater Switch (switch to control enclosure heater)
+
+---
+
 ## ⚡ Daily Energy Use Summary
 
 ### Base System (5-minute wake cycle)
