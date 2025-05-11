@@ -24,6 +24,8 @@ ota:
 deep_sleep:
   run_duration: 10s # Enough time to take measurements and send
   sleep_duration: 5min # Adjust sleep duration as needed
+  prevent_deep_sleep:
+    - wake_hold_switch # Prevent deep sleep (for OTA updates)
 
 # I2C bus configuration (GPIO4=SDA, GPIO5=SCL)
 i2c:
@@ -212,6 +214,12 @@ uart:
   baud_rate: 9600
 
 # OLED display configuration
+  # Virtual switch to enable wake-lock (for OTA updates)
+  - platform: template
+    name: "Wake-Lock"
+    id: wake_hold_switch
+    restore_mode: RESTORE_DEFAULT_OFF
+
 font:
   - file: "fonts/Roboto-Regular.ttf"
     id: roboto
