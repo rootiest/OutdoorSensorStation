@@ -3,3 +3,4 @@ secrets.yml
 *.log
 build/
 idedata/
+.esphome/
