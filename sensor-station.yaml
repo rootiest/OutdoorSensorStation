@@ -38,7 +38,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Sensor-Station Fallback Hotspot"
-    password: "z0FUaCP6k1gQ"
+    password: !secret hotspot_password
 
 captive_portal:
 
