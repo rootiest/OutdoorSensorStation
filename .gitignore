@@ -1,2 +1,5 @@
 secrets.yaml
 secrets.yml
+*.log
+build/
+idedata/
