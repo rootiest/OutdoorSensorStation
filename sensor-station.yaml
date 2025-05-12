@@ -1,12 +1,46 @@
+##### Outdoor Sensor Station #####
+
 esphome:
+  project:
+    name: "outdoor.sensor_station"
+    version: "1.0.0"
   name: sensor-station
-  platform: ESP32
+  friendly_name: Sensor Station
+  area: outside
+  on_boot:
+    then:
+      - logger.log: "Booting, powering sensors"
+      # Enable sensor power rail
+      - switch.turn_on: pms_power
+      - delay: 5s # Let sensors stabilize
+      # Conditionally enable PMS
+      - script.execute: maybe_enable_pms
+      # Delay only if PMS is active
+      - if:
+          condition:
+            lambda: "return id(pms_power).state;"
+          then:
+            - logger.log: "Delaying for PMS warm-up (30s)"
+            - delay: 30s
+      # Smart sleep logic
+      - script.execute: smart_sleep
+
+esp32:
   board: esp32-c3-devkitm-1 # Closest board profile for ESP32-C3 SuperMini
+  framework:
+    type: arduino
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: true
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Sensor-Station Fallback Hotspot"
+    password: "z0FUaCP6k1gQ"
+
+captive_portal:
 
 # Enable logging for troubleshooting
 logger:
@@ -19,13 +53,14 @@ api:
 
 # Enable OTA updates
 ota:
+  - platform: esphome
+    password: !secret ota_password
 
 # Set deep sleep mode for power efficiency
 deep_sleep:
-  run_duration: 10s # Enough time to take measurements and send
-  sleep_duration: 5min # Adjust sleep duration as needed
-  prevent_deep_sleep:
-    - wake_hold_switch # Prevent deep sleep (for OTA updates)
+  id: deep_sleep_control
+  run_duration: 45s # default run duration
+  sleep_duration: 5min # default sleep duration (can be overridden dynamically)
 
 # I2C bus configuration (GPIO4=SDA, GPIO5=SCL)
 i2c:
@@ -53,7 +88,7 @@ sensor:
     update_interval: 5s
 
   # BMP280 atmospheric pressure sensor
-  - platform: bmp280
+  - platform: bmp280_i2c
     temperature:
       name: "BMP280 Temperature" # Secondary temp reading
       id: bmp280_temp
@@ -71,8 +106,8 @@ sensor:
     update_interval: 5s
 
   # DS18B20 pond water temperature sensor
-  - platform: dallas
-    address: 0x0000000000000000 # Replace with real sensor address
+  - platform: dallas_temp
+    address: 0x1234567812345628 # Replace with real sensor address
     name: "Pond Water Temperature"
     id: pond_temp
     update_interval: 5s
@@ -100,8 +135,8 @@ sensor:
     current:
       name: "Battery Current"
       id: batt_current
-    voltage:
-      name: "Battery Voltage"
+    bus_voltage:
+      name: Battery Voltage
       id: batt_voltage
     power:
       name: "Battery Power"
@@ -120,7 +155,8 @@ sensor:
     pm_10_0:
       name: "PM10.0"
       id: pm_10_0
-    update_interval: 5min
+    update_interval: 30s
+    id: pms_sensor
 
   # HC-SR04 Ultrasonic Distance sensor
   - platform: ultrasonic
@@ -214,7 +250,7 @@ sensor:
   - platform: copy
     source_id: wifi_signal_db
     name: "WiFi Signal Percent"
-    id: wifi_signal
+    id: wifi_signal_percent
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
     unit_of_measurement: "Signal %"
@@ -222,8 +258,9 @@ sensor:
     device_class: ""
 
 # Dallas 1-wire setup
-dallas:
-  - pin: GPIO6
+one_wire:
+  - platform: gpio
+    pin: GPIO6
 
 # UART for PMS5003 air quality sensor
 uart:
@@ -234,18 +271,105 @@ uart:
 switch:
   # Virtual switch to enable wake-lock (for OTA updates)
   - platform: template
-    name: "Wake-Lock"
     id: wake_hold_switch
+    name: "Wake-Lock"
     restore_mode: RESTORE_DEFAULT_OFF
+    optimistic: true
+    turn_on_action:
+      - logger.log: "Wake-Lock ON → Preventing deep sleep."
+      - deep_sleep.prevent: deep_sleep_control
+    turn_off_action:
+      - logger.log: "Wake-Lock OFF → Allowing deep sleep."
+      - deep_sleep.allow: deep_sleep_control
+
+    # Switch for PMS power supply
+  - platform: gpio
+    pin:
+      number: GPIO2
+      ignore_strapping_warning: true
+    id: pms_power
+    name: "PMS Sensor Power"
 
     # Heater control via GPIO8 through MOSFET
   - platform: gpio
-    pin: GPIO8
+    pin:
+      number: GPIO8
+      ignore_strapping_warning: true
     name: "Internal Heater"
     id: internal_heater
 
-# Heater safety timeout
+  # Input boolean to control smart sleep duration
+  - platform: template
+    id: force_long_sleep
+    name: "Force Long Sleep"
+    restore_mode: RESTORE_DEFAULT_OFF
+    entity_category: config
+    optimistic: true
+
+time:
+  # Sleep timer
+  - platform: homeassistant
+    id: ha_time
+    on_time:
+      - seconds: 9
+        minutes: "*"
+        then:
+          - script.execute: prepare_for_sleep
+          - delay: 100ms
+          - script.execute: smart_sleep
+  - platform: sntp
+    id: sntp_time
+
 script:
+  # Smart sleep control
+  - id: smart_sleep
+    then:
+      - lambda: |-
+          ESP_LOGI("smart_sleep", "Deciding sleep duration...");
+          if (id(force_long_sleep).state) {
+            ESP_LOGI("smart_sleep", "Force Long Sleep active → 30min");
+            id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000); // 30min
+          } else {
+            float battery_v = id(batt_voltage).state;
+            float solar_i = id(solar_current).state;
+
+            if (battery_v > 3.7 && solar_i > 50.0) {
+              ESP_LOGI("smart_sleep", "Battery OK (%.2fV), Solar Good (%.1fmA) → Short Sleep (5min)", battery_v, solar_i);
+              id(deep_sleep_control).set_sleep_duration(5 * 60 * 1000); // 5min
+            } else {
+              ESP_LOGI("smart_sleep", "Battery Low (%.2fV) or Solar Weak (%.1fmA) → Long Sleep (30min)", battery_v, solar_i);
+              id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000); // 30min
+            }
+          }
+      - deep_sleep.enter: deep_sleep_control
+
+  # Deep sleep preparation
+  - id: prepare_for_sleep
+    mode: restart
+    then:
+      - logger.log: "Preparing for deep sleep"
+      - output.turn_off: oled_power
+      - switch.turn_off: pms_power
+      - switch.turn_off: internal_heater
+      - delay: 100ms
+      - script.execute: smart_sleep
+
+    # Enable PMS5003 if battery level is sufficient
+  - id: maybe_enable_pms
+    then:
+      - lambda: |-
+          float battery_v = id(batt_voltage).state;
+          float solar_i = id(solar_current).state;
+
+          if (battery_v > 3.6 || solar_i > 20.0) {
+            ESP_LOGI("pms_control", "Battery OK → Powering PMS sensor");
+            id(pms_power).turn_on();
+          } else {
+            ESP_LOGI("pms_control", "Low battery → PMS sensor off");
+            id(pms_power).turn_off();
+          }
+
+  # Heater safety timeout
   - id: heater_timeout_guard
     mode: restart
     then:
@@ -253,13 +377,40 @@ script:
       - switch.turn_off: internal_heater
 
 # Automatic heater activation based on internal temp
+
 climate:
   - platform: thermostat
     name: "Enclosure Heater Control"
-    id: enclusure_heater_control
-    sensor: "Enclosure Internal Temp"
-    default_target_temperature_low: 2°C
-    default_target_temperature_high: 5°C
+    id: enclosure_heater_control
+    sensor: enclosure_temp
+    humidity_sensor: ambient_humidity
+    min_idle_time: 60s
+    min_heating_off_time: 120s
+    min_heating_run_time: 180s
+    heat_deadband: 0.3°C
+    heat_overrun: 1.5°C
+    visual:
+      min_temperature: -20
+      max_temperature: 10
+    default_preset: "Normal"
+    on_boot_restore_from: memory
+    preset:
+      # Normal Heating Mode
+      - name: "Normal"
+        mode: heat
+        default_target_temperature_low: 2.0
+      # Economy Heating Mode
+      - name: "Eco"
+        mode: heat
+        default_target_temperature_low: 0.5
+      # Boost Heating Mode
+      - name: "Boost"
+        mode: heat
+        default_target_temperature_low: 4.0
+      # Disable Heating Mode
+      - name: "Disable"
+        mode: heat
+        default_target_temperature_low: -20.0
     heat_action:
       - switch.turn_on: internal_heater
       - script.execute: heater_timeout_guard
@@ -304,11 +455,16 @@ output:
     id: oled_power
 
 # Display activation button
-button:
+binary_sensor:
   - platform: gpio
     pin:
       number: GPIO9
       inverted: true
+      ignore_strapping_warning: true
+      mode:
+        input: true
+        pullup: true
+    id: oled_activate_button
     name: "OLED Activate Button"
     on_press:
       - output.turn_on: oled_power
@@ -317,13 +473,11 @@ button:
 
 # Display configuration
 display:
-  - platform: sh1107
+  - platform: ssd1306_i2c
     model: "SH1107 128x128"
     address: 0x3C
     rotation: 0
     lambda: |-
-      if (!id(oled_display_on)) return;
-
       if (id(wake_hold_switch).state) {
         it.printf(32, 34, id(font_large), "WAKE");
         it.printf(32, 68, id(font_large), "LOCK");
@@ -340,5 +494,5 @@ display:
         it.printf(0, 0, id(font_small), "Light: %.0f", id(ambient_light).state);
         it.printf(0, 14, id(font_small), "Pressure: %.0f hPa", id(atmospheric_pressure).state);
         it.printf(0, 28, id(font_small), "Pond Temp: %.1f°C", id(pond_temp).state);
-        it.printf(0, 42, id(font_small), "Water Depth: %.0fcm", id(water_level).state);
+        it.printf(0, 42, id(font_small), "Water Depth: %.0fcm", id(pond_level).state);
       }
