@@ -12,8 +12,8 @@ INA219,Current/voltage monitoring (I²C),2,
 PMS5003,Air quality sensor (UART),1,Optional
 SH1107 OLED 128x128,I²C display,1,
 Momentary Button,OLED activation,1,
-PTC Heater (5V, 1W),Thermal protection in cold,1,
-STP55NF06L N-MOSFET,Power switch for OLED/heater,2,Logic-level TO-220
+PI Heating Element (5V, 1W),Thermal protection in cold,1,
+STP55NF06L N-MOSFET,Power switch for OLED/heater,3,Logic-level TO-220
 4.7kΩ Resistor (1/4W),I²C + DS18B20 pull-ups,3,2 for SDA/SCL, 1 for DS18B20
 470µF Electrolytic Capacitor,Bulk decoupling near ESP32,1,6.3V+
 100nF Ceramic Capacitor,High-frequency filter near power input,1,50V+

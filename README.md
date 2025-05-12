@@ -34,12 +34,12 @@
 | **HC-SR04**                                | Ultrasonic distance                    | 0mA (powered off)    | ≈15–20mA                     | Only on briefly to take reading                      |
 | **2× INA219**                              | Current/voltage monitor                | ≈0.6mA each          | ≈1.0mA each                  | Continuously powered                                 |
 | **DS18B20**                                | Waterproof temp (fish pond)            | ≈0.5mA               | ≈1.5mA                       | Needs pull-up resistor                               |
-| **PTC Heater (5V, 1W)**                    | Maintains safe temp in cold climates   | 0mA (off)            | ≈200mA (when on)             | Controlled via GPIO + MOSFET                         |
+| **PI Heating Element (5V, 1W)**            | Maintains safe temp in cold climates   | 0mA (off)            | ≈200mA (when on)             | Controlled via GPIO + MOSFET                         |
 | **PMS5003** _(optional)_                   | Air quality sensor                     | ≈1.0mA (sleep)       | 100–120mA                    | Wakes ≈5s per cycle                                  |
 | **CN3065**                                 | Solar charge controller                | Negligible           | Passive device               | Handles charging logic                               |
 | **5V 200mA Solar Panel**                   | Solar input                            | N/A                  | 200mA max                    | One panel used                                       |
 | **3000mAh LiPo Battery**                   | Power storage                          | N/A                  | N/A                          | Powers the full system                               |
-| **2× STP55NF06L N-MOSFETs**                | Power switching (OLED, heater)         | 0mA                  | 0mA                          | Logic-level, TO-220, controlled by 3.3V GPIO         |
+| **3× STP55NF06L N-MOSFETs**                | Power switching (OLED, heater)         | 0mA                  | 0mA                          | Logic-level, TO-220, controlled by 3.3V GPIO         |
 | **3× 4.7kΩ Resistor (1/4W)**               | Pull-ups for SDA, SCL, and DS18B20     | N/A                  | N/A                          | 2 for I²C (SDA/SCL), 1 for DS18B20                   |
 | **100nF Ceramic Capacitor (50V)**          | High-frequency filtering near ESP32    | N/A                  | N/A                          | Place close to ESP32 power pin and sensor power rail |
 | **470µF Electrolytic Capacitor (6.3–10V)** | Bulk decoupling                        | N/A                  | N/A                          | Use near ESP32 VIN to buffer inrush currents         |
@@ -209,8 +209,8 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 
 #### Power Management
 
-- 1× PTC Heater (5V, 1W)
-- 2× STP55NF06L N-MOSFETs (OLED + Heater switching)
+- 1× PI Heating Element (5V, 1W)
+- 3× STP55NF06L N-MOSFETs (OLED + Heater switching)
 
 #### Passive Components
 
