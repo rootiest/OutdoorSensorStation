@@ -37,10 +37,12 @@ wifi:
 
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: "Sensor-Station Fallback Hotspot"
+    ssid: "Sensor-Station"
     password: !secret hotspot_password
 
 captive_portal:
+
+# web_server: # INFO: Enable to use web server function
 
 # Enable logging for troubleshooting
 logger:
@@ -59,14 +61,29 @@ ota:
 # Set deep sleep mode for power efficiency
 deep_sleep:
   id: deep_sleep_control
-  run_duration: 45s # default run duration
+  run_duration: 5min # default run duration
   sleep_duration: 5min # default sleep duration (can be overridden dynamically)
 
-# I2C bus configuration (GPIO4=SDA, GPIO5=SCL)
+  # I2C bus configuration (GPIO4=SDA, GPIO5=SCL)
 i2c:
-  sda: GPIO4
-  scl: GPIO5
+  sda: GPIO4 # FIXME: <---- Add pull-up resistor
+  scl: GPIO5 # FIXME: <---- Add pull-up resistor
   scan: true
+
+# Dallas 1-wire setup
+one_wire:
+  - platform: gpio
+    pin:
+      number: GPIO6 # FIXME: <---- Add pull-up resistor
+      mode: # FIXME: <---- Remove when pull-up resistor added
+        input: true
+        pullup: true
+
+# UART for PMS5003 air quality sensor
+uart:
+  rx_pin: GPIO21
+  tx_pin: GPIO20
+  baud_rate: 9600
 
 # Configure sensors
 sensor:
@@ -75,7 +92,11 @@ sensor:
     pin: GPIO0
     name: "Ambient Light"
     id: ambient_light
-    update_interval: 5s
+    device_class: illuminance
+    unit_of_measurement: lx
+    filters:
+      - lambda: |-
+          return (x / 10000.0) * 2000000.0;
 
   # AHT20 temperature and humidity sensor
   - platform: aht10
@@ -95,7 +116,7 @@ sensor:
     pressure:
       name: "Atmospheric Pressure"
       id: atmospheric_pressure
-    address: 0x76 # Verify sensor address
+    address: 0x77 # Verify sensor address
     update_interval: 5s
 
   # TMP102 internal enclosure temperature sensor
@@ -107,7 +128,7 @@ sensor:
 
   # DS18B20 pond water temperature sensor
   - platform: dallas_temp
-    address: 0x1234567812345628 # Replace with real sensor address
+    address: 0xdd0000000589bc28
     name: "Pond Water Temperature"
     id: pond_temp
     update_interval: 5s
@@ -115,7 +136,7 @@ sensor:
   # INA219 voltage/current sensors
   # Solar Power Supply
   - platform: ina219
-    address: 0x40
+    address: 0x44
     shunt_resistance: 0.1 ohm
     current:
       name: "Solar Current"
@@ -130,7 +151,7 @@ sensor:
 
     # Battery Power Supply/Charging
   - platform: ina219
-    address: 0x41
+    address: 0x40
     shunt_resistance: 0.1 ohm
     current:
       name: "Battery Current"
@@ -155,24 +176,31 @@ sensor:
     pm_10_0:
       name: "PM10.0"
       id: pm_10_0
-    update_interval: 30s
+    update_interval: 120s
     id: pms_sensor
 
   # HC-SR04 Ultrasonic Distance sensor
   - platform: ultrasonic
     trigger_pin: GPIO10
-    echo_pin: GPIO3
+    echo_pin:
+      number: GPIO9 # WARN: Swap this from GPIO3
+      ignore_strapping_warning: true
     name: "Water Level Distance"
     id: water_distance
-    update_interval: 5s
+    update_interval: 1s
+    filters:
+      - sliding_window_moving_average:
+          window_size: 30
+          send_every: 30
 
   # Calculate actual water level
   - platform: template
     name: "Actual Water Level"
     id: pond_level
+    # FIXME: Set this to the distance from the sensor to water level at zero (in cm)
     lambda: |-
-      const float sensor_height = 100.0;  // Set this to the distance from the sensor to water level at zero (in cm)
-      return sensor_height - id(water_distance).state;
+      const float sensor_height_cm = 100.0;  // in cm
+      return sensor_height_cm - (id(water_distance).state * 100.0);
     unit_of_measurement: "cm"
     update_interval: 5s
 
@@ -257,46 +285,48 @@ sensor:
     entity_category: "diagnostic"
     device_class: ""
 
-# Dallas 1-wire setup
-one_wire:
-  - platform: gpio
-    pin: GPIO6
-
-# UART for PMS5003 air quality sensor
-uart:
-  rx_pin: GPIO21
-  tx_pin: GPIO20
-  baud_rate: 9600
-
 switch:
   # Virtual switch to enable wake-lock (for OTA updates)
   - platform: template
     id: wake_hold_switch
     name: "Wake-Lock"
-    restore_mode: RESTORE_DEFAULT_OFF
+    restore_mode: ALWAYS_ON
     optimistic: true
     turn_on_action:
-      - logger.log: "Wake-Lock ON → Preventing deep sleep."
+      - logger.log: "Wake-Lock ON → Preventing deep sleep"
       - deep_sleep.prevent: deep_sleep_control
     turn_off_action:
-      - logger.log: "Wake-Lock OFF → Allowing deep sleep."
+      - logger.log: "Wake-Lock OFF → Allowing deep sleep"
       - deep_sleep.allow: deep_sleep_control
 
     # Switch for PMS power supply
   - platform: gpio
     pin:
-      number: GPIO2
+      number: GPIO8 # FIXME: <---- Add MOSfet for power control
       ignore_strapping_warning: true
     id: pms_power
     name: "PMS Sensor Power"
 
-    # Heater control via GPIO8 through MOSFET
+    # Heater control via GPIO2 through MOSFET
   - platform: gpio
     pin:
-      number: GPIO8
+      number: GPIO2 # FIXME: <---- Add MOSfet for power control
       ignore_strapping_warning: true
     name: "Internal Heater"
     id: internal_heater
+
+    # Sensor power rail MOSFET
+    # WARN: This pin is swapped with ultrasonic echo GPIO9
+  - platform: gpio
+    pin:
+      number: GPIO3 # FIXME: <---- Add MOSfet for power control
+    id: sensor_power
+    name: "Sensor Power Rail"
+
+    # OLED power via GPIO7 through MOSFET
+  - platform: gpio
+    pin: GPIO7 # FIXME: <---- Add MOSfet for power control
+    id: oled_power
 
   # Input boolean to control smart sleep duration
   - platform: template
@@ -314,8 +344,6 @@ time:
       - seconds: 9
         minutes: "*"
         then:
-          - script.execute: prepare_for_sleep
-          - delay: 100ms
           - script.execute: smart_sleep
   - platform: sntp
     id: sntp_time
@@ -325,34 +353,47 @@ script:
   - id: smart_sleep
     then:
       - lambda: |-
-          ESP_LOGI("smart_sleep", "Deciding sleep duration...");
+          if (id(wake_hold_switch).state) {
+            ESP_LOGI("smart_sleep", "Wake-Lock active → skipping deep sleep");
+            return;
+          }
+          ESP_LOGI("smart_sleep", "Wake-Lock OFF → evaluating sleep duration");
           if (id(force_long_sleep).state) {
-            ESP_LOGI("smart_sleep", "Force Long Sleep active → 30min");
-            id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000); // 30min
+            id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000);
           } else {
             float battery_v = id(batt_voltage).state;
             float solar_i = id(solar_current).state;
-
             if (battery_v > 3.7 && solar_i > 50.0) {
-              ESP_LOGI("smart_sleep", "Battery OK (%.2fV), Solar Good (%.1fmA) → Short Sleep (5min)", battery_v, solar_i);
-              id(deep_sleep_control).set_sleep_duration(5 * 60 * 1000); // 5min
+              ESP_LOGI("smart_sleep", "Battery OK → short sleep");
+              id(deep_sleep_control).set_sleep_duration(5 * 60 * 1000);
             } else {
-              ESP_LOGI("smart_sleep", "Battery Low (%.2fV) or Solar Weak (%.1fmA) → Long Sleep (30min)", battery_v, solar_i);
-              id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000); // 30min
+              ESP_LOGI("smart_sleep", "Battery low → long sleep");
+              id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000);
             }
           }
-      - deep_sleep.enter: deep_sleep_control
+      # Start the deep sleep timer if wake-lock is off
+      - if:
+          condition:
+            switch.is_on: pms_power
+          then:
+            - logger.log: "Extending wake time to 30 seconds (PMS active)"
+            - delay: 30s
+          else:
+            - logger.log: "Wake time set to 15 seconds (no PMS)"
+            - delay: 15s
+      - script.execute: prepare_for_sleep
 
   # Deep sleep preparation
   - id: prepare_for_sleep
     mode: restart
     then:
       - logger.log: "Preparing for deep sleep"
-      - output.turn_off: oled_power
+      - switch.turn_off: oled_power
       - switch.turn_off: pms_power
+      - switch.turn_off: sensor_power
       - switch.turn_off: internal_heater
       - delay: 100ms
-      - script.execute: smart_sleep
+      - deep_sleep.enter: deep_sleep_control
 
     # Enable PMS5003 if battery level is sufficient
   - id: maybe_enable_pms
@@ -421,6 +462,10 @@ climate:
 
 # Track display page
 globals:
+  - id: is_cold_boot
+    type: bool
+    restore_value: no
+    initial_value: "true"
   - id: display_page
     type: int
     restore_value: no
@@ -439,60 +484,167 @@ font:
     id: roboto
     size: 16
 
-  - file: "fonts/arial.ttf"
+  - file: "fonts/Roboto-Regular.ttf"
     id: font_small
-    size: 12
+    size: 14
+    glyphs:
+      [
+        " ",
+        "!",
+        '"',
+        "#",
+        "$",
+        "%",
+        "&",
+        "'",
+        "(",
+        ")",
+        "*",
+        "+",
+        ",",
+        "-",
+        ".",
+        "/",
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        ":",
+        ";",
+        "<",
+        "=",
+        ">",
+        "?",
+        "@",
+        "A",
+        "B",
+        "C",
+        "D",
+        "E",
+        "F",
+        "G",
+        "H",
+        "I",
+        "J",
+        "K",
+        "L",
+        "M",
+        "N",
+        "O",
+        "P",
+        "Q",
+        "R",
+        "S",
+        "T",
+        "U",
+        "V",
+        "W",
+        "X",
+        "Y",
+        "Z",
+        "[",
+        "\\",
+        "]",
+        "^",
+        "_",
+        "`",
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+        "g",
+        "h",
+        "i",
+        "j",
+        "k",
+        "l",
+        "m",
+        "n",
+        "o",
+        "p",
+        "q",
+        "r",
+        "s",
+        "t",
+        "u",
+        "v",
+        "w",
+        "x",
+        "y",
+        "z",
+        "{",
+        "|",
+        "}",
+        "~",
+        "°",
+        "µ",
+        "²",
+        "³",
+        "·",
+        "±",
+        "¶",
+      ]
 
-  - file: "fonts/arial.ttf"
+  - file: "fonts/Roboto-Regular.ttf"
     id: font_large
     size: 28
     glyphs: [" ", "A", "C", "E", "K", "L", "O", "W"]
-
-# Display powered via GPIO7 through MOSFET
-output:
-  - platform: gpio
-    pin: GPIO7
-    id: oled_power
 
 # Display activation button
 binary_sensor:
   - platform: gpio
     pin:
-      number: GPIO9
-      inverted: true
-      ignore_strapping_warning: true
+      number: GPIO1 # FIXME: <---- Add button for display activation
+      inverted: true # FIXME: <---- Add pull-up resistor for strapping safety
       mode:
         input: true
         pullup: true
     id: oled_activate_button
     name: "OLED Activate Button"
     on_press:
-      - output.turn_on: oled_power
-      - delay: 10s # Display timeout
-      - output.turn_off: oled_power
+      - logger.log: "OLED button pressed"
+      - switch.turn_on: oled_power
+      - delay: 30s # Display timeout
+      - switch.turn_off: oled_power
 
 # Display configuration
 display:
   - platform: ssd1306_i2c
     model: "SH1107 128x128"
     address: 0x3C
-    rotation: 0
+    rotation: 180
+    update_interval: 1s
     lambda: |-
       if (id(wake_hold_switch).state) {
         it.printf(32, 34, id(font_large), "WAKE");
         it.printf(32, 68, id(font_large), "LOCK");
         return;
       }
-
       if (id(display_page) == 0) {
-        it.printf(0, 0, id(font_small), "Temp: %.1f°C", id(ambient_temp).state);
-        it.printf(0, 14, id(font_small), "Hum:  %.0f%%", id(ambient_humidity).state);
-        it.printf(0, 28, id(font_small), "IntTemp: %.1f°C", id(enclosure_temp).state);
-        it.printf(0, 42, id(font_small), "Batt: %.0f%%", id(batt_percent).state);
-        it.printf(0, 56, id(font_small), "Solar: %.1fW", id(solar_power).state);
+        it.printf(0, 8,  id(font_small), "Temp: %.1f°C", id(ambient_temp).state);
+        it.printf(0, 22, id(font_small), "Hum:  %.0f%%", id(ambient_humidity).state);
+        it.printf(0, 36, id(font_small), "IntTemp: %.1f°C", id(enclosure_temp).state);
+        it.printf(0, 50, id(font_small), "WiFi: %.0f%%", id(wifi_signal_percent).state);
+        it.printf(0, 64, id(font_small), "Batt: %.0f%%", id(batt_percent).state);
+        it.printf(0, 78, id(font_small), "Solar: %.1fW", id(solar_power).state);
+        it.printf(0, 92, id(font_small), "Load: %.1fW", id(total_power_use).state);
+        it.printf(0, 106, id(font_small), "Ibat: %.1fmA", id(batt_current).state * 1000);
       } else {
-        it.printf(0, 0, id(font_small), "Light: %.0f", id(ambient_light).state);
-        it.printf(0, 14, id(font_small), "Pressure: %.0f hPa", id(atmospheric_pressure).state);
-        it.printf(0, 28, id(font_small), "Pond Temp: %.1f°C", id(pond_temp).state);
-        it.printf(0, 42, id(font_small), "Water Depth: %.0fcm", id(pond_level).state);
+        it.printf(0, 8,  id(font_small), "Light: %.0flx", id(ambient_light).state);
+        it.printf(0, 22, id(font_small), "Pressure: %.0f hPa", id(atmospheric_pressure).state);
+        it.printf(0, 36, id(font_small), "Pond Temp: %.1f°C", id(pond_temp).state);
+        it.printf(0, 50, id(font_small), "Water Depth: %.0fcm", id(pond_level).state);
+        it.printf(0, 64, id(font_small), "PM2.5: %.1f", id(pm_2_5).state);
+        it.printf(0, 78, id(font_small), "Vsol: %.2fV", id(solar_voltage).state);
+        it.printf(0, 92, id(font_small), "Isol: %.1fmA", id(solar_current).state * 1000);
+        it.printf(0, 106, id(font_small), "Heat: %s",
+                  id(enclosure_heater_control).action == climate::CLIMATE_ACTION_HEATING ? "ON" : "OFF");
       }
