@@ -30,19 +30,34 @@ esp32:
   framework:
     type: arduino
 
+# Single WiFi network with fast_connect
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: true
-
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Sensor-Station"
     password: !secret hotspot_password
 
+# INFO: Optionally replace the above with below for multi-network.
+# The networks will be tried in the order they are provided here.
+#
+# wifi:
+#   networks:
+#   - ssid: !secret wifi_ssid
+#     password: !secret wifi_password
+#   - ssid: !secret backup_wifi_ssid
+#     password: !secret backup_wifi_password
+#   ap:
+#     ssid: "Sensor-Station"
+#     password: !secret hotspot_password
+
 captive_portal:
 
-# web_server: # INFO: Enable to use web server function
+# INFO: Enable to use web server function
+#
+# web_server:
 
 # Enable logging for troubleshooting
 logger:
@@ -227,7 +242,17 @@ sensor:
     update_interval: 5s
     lambda: |-
       return (id(solar_voltage).state * id(solar_current).state) -
-             (id(batt_voltage).state * id(batt_current).state);
+            (id(batt_voltage).state * id(batt_current).state);
+
+  # Template to calculate System Current (in amps)
+  - platform: template
+    name: "Estimated Total Current Use"
+    id: total_current_use
+    unit_of_measurement: "A"
+    accuracy_decimals: 3
+    update_interval: 5s
+    lambda: |-
+      return id(solar_current).state - id(batt_current).state;
 
   # Daily total energy usage (resets every day)
   - platform: total_daily_energy
@@ -236,6 +261,15 @@ sensor:
     power_id: total_power_use
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
+    restore: true
+
+  # Daily total current useage (resets every day)
+  - platform: total_daily_energy
+    name: "Total Current Today"
+    id: total_current_today
+    power_id: total_current_use
+    unit_of_measurement: "Ah"
+    accuracy_decimals: 3
     restore: true
 
   # Lifetime total energy usage (never resets)
@@ -248,6 +282,16 @@ sensor:
     accuracy_decimals: 2
     restore: true
 
+  # Lifetime total current usage (never resets)
+  - platform: integration
+    name: "Total Current Used (All-Time)"
+    id: total_current_all_time
+    sensor: total_current_use
+    time_unit: h
+    unit_of_measurement: "Ah"
+    accuracy_decimals: 3
+    restore: true
+
   # Daily solar charge (resets every day)
   - platform: total_daily_energy
     name: "Solar Energy Collected Today"
@@ -255,6 +299,15 @@ sensor:
     power_id: solar_power
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
+    restore: true
+
+  # Daily solar current (resets every day)
+  - platform: total_daily_energy
+    name: "Solar Current Today"
+    id: solar_current_today
+    power_id: solar_current
+    unit_of_measurement: "Ah"
+    accuracy_decimals: 3
     restore: true
 
   # Lifetime solar charge (never resets)
@@ -265,6 +318,16 @@ sensor:
     time_unit: h
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
+    restore: true
+
+  # Lifewtime solar current (never resets)
+  - platform: integration
+    name: "Solar Current (All-Time)"
+    id: solar_current_all_time
+    sensor: solar_current
+    time_unit: h
+    unit_of_measurement: "Ah"
+    accuracy_decimals: 3
     restore: true
 
   # WiFi signal strength/RSSI in dB
@@ -328,13 +391,20 @@ switch:
     pin: GPIO7 # FIXME: <---- Add MOSfet for power control
     id: oled_power
 
-  # Input boolean to control smart sleep duration
+  # Switch to control smart sleep duration
   - platform: template
     id: force_long_sleep
     name: "Force Long Sleep"
     restore_mode: RESTORE_DEFAULT_OFF
     entity_category: config
     optimistic: true
+
+  - platform: template
+    name: "Force Short Sleep"
+    id: force_short_sleep
+    optimistic: true
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_OFF
 
 time:
   # Sleep timer
@@ -359,7 +429,11 @@ script:
           }
           ESP_LOGI("smart_sleep", "Wake-Lock OFF → evaluating sleep duration");
           if (id(force_long_sleep).state) {
+            ESP_LOGI("smart_sleep", "Force Long Sleep active → sleeping 30 min");
             id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000);
+          } else if (id(force_short_sleep).state) {
+            ESP_LOGI("smart_sleep", "Force Short Sleep active → sleeping 30 sec");
+            id(deep_sleep_control).set_sleep_duration(30 * 1000);
           } else {
             float battery_v = id(batt_voltage).state;
             float solar_i = id(solar_current).state;
@@ -387,13 +461,18 @@ script:
   - id: prepare_for_sleep
     mode: restart
     then:
-      - logger.log: "Preparing for deep sleep"
-      - switch.turn_off: oled_power
-      - switch.turn_off: pms_power
-      - switch.turn_off: sensor_power
-      - switch.turn_off: internal_heater
-      - delay: 100ms
-      - deep_sleep.enter: deep_sleep_control
+      - if:
+          condition:
+            not:
+              switch.is_on: wake_hold_switch
+          then:
+            - logger.log: "Preparing for deep sleep"
+            - switch.turn_off: oled_power
+            - switch.turn_off: pms_power
+            - switch.turn_off: sensor_power
+            - switch.turn_off: internal_heater
+            - delay: 100ms
+            - deep_sleep.enter: deep_sleep_control
 
     # Enable PMS5003 if battery level is sufficient
   - id: maybe_enable_pms
@@ -473,7 +552,7 @@ globals:
 
 # Display page turn interval
 interval:
-  - interval: 3s
+  - interval: 5s
     then:
       - lambda: |-
           id(display_page) = (id(display_page) + 1) % 2;
@@ -621,13 +700,14 @@ display:
     model: "SH1107 128x128"
     address: 0x3C
     rotation: 180
-    update_interval: 1s
+    update_interval: 2s
+    # FIXME: Uncomment the wake_hold if statement to enable WAKE-LOCK display
     lambda: |-
-      if (id(wake_hold_switch).state) {
-        it.printf(32, 34, id(font_large), "WAKE");
-        it.printf(32, 68, id(font_large), "LOCK");
-        return;
-      }
+      //if (id(wake_hold_switch).state) {
+      //  it.printf(32, 34, id(font_large), "WAKE");
+      //  it.printf(32, 68, id(font_large), "LOCK");
+      //  return;
+      //}
       if (id(display_page) == 0) {
         it.printf(0, 8,  id(font_small), "Temp: %.1f°C", id(ambient_temp).state);
         it.printf(0, 22, id(font_small), "Hum:  %.0f%%", id(ambient_humidity).state);
