@@ -4,6 +4,7 @@
 
 - [🧰 Parts List](#-parts-list)
 - [ESPHome Configuration](#esphome-configuration)
+  - [Configuring Secrets](#configuring-secrets)
 - [📡 ESPHome Sensor Station Entities](#-esphome-sensor-station-entities)
   - [🌡️ Environmental Sensors](#️-environmental-sensors)
   - [⚡ Power & Energy Monitoring](#-power--energy-monitoring)
@@ -21,6 +22,7 @@
   - [🔓 Wake Lock Behavior](#-wake-lock-behavior)
   - [👆 Display Button Behavior](#-display-button-behavior)
   - [💤 Smart Sleep Behavior](#-smart-sleep-behavior)
+    - [Wake Timing](#wake-timing)
     - [Smart Sleep Timing](#smart-sleep-timing)
     - [Preparing for Sleep](#preparing-for-sleep)
     - [Smart PMS Control](#smart-pms-control)
@@ -32,6 +34,10 @@
   - [Passive Components](#passive-components)
   - [Optional Components](#optional-components)
   - [Downloadable BOM Formats](#downloadable-bom-formats)
+- [📦 Case and Assembly](#case-and-assembly)
+  - [3D-Printed Enclosure](#3d-printed-enclosure)
+  - [PCB Design](#pcb-design)
+  - [Assembly Instructions](#assembly-instructions)
 - [✅ Conclusion](#-conclusion)
 
 ## 🧰 Parts List
@@ -61,12 +67,43 @@
 
 ## ESPHome Configuration
 
-[YAML configuration for the Sensor Station](ESPHome/sensor_station.yml)
+[YAML configuration for the Sensor Station](sensor-station.yaml)
+is provided in this repository.
 
 This will configure the ESPHome firmware for the sensor station.
 
 See [ESPHome documentation](https://esphome.io/) for more details
 on how to set up and use ESPHome.
+
+### Configuring Secrets
+
+The firmware will reference a `secrets.yaml` file for sensitive information.  
+Naturally, that file should not be included in this repository.
+
+However an example file is provided as [secrets.yaml.example](secrets.yaml.example)
+for reference.
+
+You should create a new file called `secrets.yaml` in the same directory
+as the `sensor-station.yaml` file.
+
+Then, using the example as a guide, fill in the required information.
+
+Your WiFi credentials go in the `wifi_ssid` and `wifi_password` fields.
+
+Optionally, you can provide a `backup_wifi_ssid` and `backup_wifi_password`.  
+(See the note on line 17 of the `sensor-station.yaml` file to enable this.)
+
+You may choose an `ota_password` for over-the-air updates, or leave it blank.
+
+You may also choose a `hotspot_password` for the fallback hotspot, or leave
+it blank for no password.
+
+The `api_encryption_key` must be a 32-byte base64 encoded string.  
+You can find a randomly generated key
+[in the ESPHome documentation](https://esphome.io/components/api.html#configuration-variables).
+
+This key is used during the station setup in Home Assistant to encrypt
+the API communication between the ESP32 and Home Assistant.
 
 ## 📡 ESPHome Sensor Station Entities
 
@@ -80,29 +117,53 @@ on how to set up and use ESPHome.
 - Enclosure Internal Temp
 - Pond Water Temperature
 - Water Level Distance
+- Actual Water Level (calculated from ultrasonic)
 
 ### ⚡ Power & Energy Monitoring
 
-- Estimated Total Power Use
 - Battery Voltage
 - Battery Current
 - Battery Power
+- Battery Percentage (calculated)
 - Solar Voltage
 - Solar Current
 - Solar Power
-- Total Energy Used Today (daily cumulative)
-- Total Energy Used (All-Time) (lifetime cumulative)
-- Solar Energy Collected Today (daily cumulative)
+- Estimated Total Power Use (solar in – battery out)
+- Estimated Total Current Use (net amps)
+- Total Energy Used Today (Wh)
+- Total Current Today (Ah)
+- Total Energy Used (All-Time, Wh)
+- Total Current Used (All-Time, Ah)
+- Solar Energy Collected Today (Wh)
+- Solar Current Today (Ah)
+- Solar Energy Collected (All-Time, Wh)
+- Solar Current (All-Time, Ah)
+
+### 🌫️ Air Quality
+
+- PM1.0
+- PM2.5
+- PM10.0
 
 ### 📶 WiFi Signal Strength
 
-- WiFi Signal dB (signal strength in decibels)
-- WiFi Signal Percent (signal strength percentage)
+- WiFi Signal dB (RSSI)
+- WiFi Signal Percent (converted)
 
 ### 🎛️ Switches & Buttons
 
-- OLED Display Activation (button to activate OLED display temporarily)
-- PTC Heater Switch (switch to control enclosure heater)
+- Wake-Lock (prevents deep sleep)
+- Force Long Sleep
+- Force Short Sleep
+- PMS Sensor Power (MOSFET)
+- Internal Heater (MOSFET)
+- Sensor Power Rail (MOSFET)
+- OLED Display Power (MOSFET)
+- OLED Activate Button (momentary input)
+
+### 🌡️ Enclosure Climate Control
+
+- Enclosure Heater Control (thermostat with presets)
 
 ---
 
@@ -285,6 +346,8 @@ based on current power conditions:
 - Otherwise, it evaluates:
   - If `force_long_sleep` is **on**,
     the system enters **long sleep** (30 minutes).
+  - Else if `force_short_sleep` is **on**,
+    it enters **short sleep** (30 seconds).
   - Else:
     - If battery voltage is **above 3.7V**
       and solar input is **above 50 mA**,
@@ -297,6 +360,25 @@ based on current power conditions:
   - Otherwise, it waits **10 seconds**.
 - If wake-lock is **not active**,
   the script initiates deep sleep after the delay.
+
+  Summary:
+
+  `wake_hold_switch` has the highest priority and will prevent sleep
+  until the lock is released.
+
+  `force_long_sleep` has the second highest priority and will
+  change sleep timing to 30 minutes.
+
+  `force_short_sleep` has the lowest priority and will
+  change sleep timing to 30 seconds.
+
+  After these initial switches are evaluated,
+  if none are enabled then the system will evaluate the battery voltage
+  and solar input to determine the sleep duration.
+
+  If [the PMS5003 sensor is enabled](#smart-pms-control),
+  wake time is extended by 30 seconds
+  to allow the sensor to stabilize before sleeping.
 
 ---
 
@@ -327,7 +409,7 @@ The PMS5003 uses ~80–100 mA when measuring and ~20–30 mA in its idle sta
 This script decides whether to power the PMS5003 sensor
 based on power availability.
 
-- If battery is **above 3.6V** or solar current is **above 20 mA**,
+- If battery is **above 3.6V** or solar current is **above 20 mA**,
   the PMS sensor is powered on.
 - Otherwise, it remains off to conserve energy.
 
@@ -388,6 +470,67 @@ based on power availability.
 
 - [CSV](BOM/sensor_station_bom.csv)
 - [JSON](BOM/sensor_station_bom.json)
+
+---
+
+## Case and Assembly
+
+An optional 3D-printable enclosure and PCB design will be provided later.  
+Assembly instructions using those components will be provided later.
+
+<!-- FIXME: Update when enclosure, PCB, and instructions are completed  -->
+
+### 3D-Printed Enclosure
+
+A 3d-printed enclosure is used to house the components.
+
+Although optional, using this enclosure is recommended for best performance.
+
+This design will provide acceptable waterproofing and
+protection from the elements while still allowing the sensors
+to access the ambient temperature, humidity, light, and
+particulate matter.
+
+A section of the enclosure will require additional insulation
+to help maintain the internal temperature of the LiPo battery
+and PMS5003 sensor.
+
+The model and STL files for the enclosure will be provided
+at a later date.
+
+<!-- FIXME: Update when model and STL files are completed  -->
+
+### PCB Design
+
+An optional custom PCB board design allows simple assembly
+and compact building of the sensor station.
+
+Some PCBs will be available for purchase, but the design files
+will also be provided for those who wish to build their own.
+
+Soldering is still required, but the PCB design will allow for
+easy installation of the soldered components like
+MOSFETs, resistors, and connectors.
+
+Alternatively, you can simply assemble the station using wires and no PCB.
+
+All of the components use through-hole soldering,
+so no special tools or skills are required.
+
+The PCB designs will be available at a later date.
+
+<!-- FIXME: Update when PCB design files are completed  -->
+
+### Assembly Instructions
+
+Assembly instructions will show how to assemble the station using
+the printed enclosure and PCB.
+
+These instructions will be provided at a later date.
+
+<!-- FIXME: Update when build instructions are completed  -->
+
+---
 
 ## ✅ Conclusion
 
