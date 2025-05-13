@@ -4,13 +4,26 @@
 
 - [🧰 Parts List](#-parts-list)
 - [ESPHome Configuration](#esphome-configuration)
+- [📡 ESPHome Sensor Station Entities](#-esphome-sensor-station-entities)
+  - [🌡️ Environmental Sensors](#️-environmental-sensors)
+  - [⚡ Power & Energy Monitoring](#-power--energy-monitoring)
+  - [📶 WiFi Signal Strength](#-wifi-signal-strength)
+  - [🎛️ Switches & Buttons](#-switches--buttons)
 - [⚡ Daily Energy Use Summary](#-daily-energy-use-summary)
   - [Base System (5-minute wake cycle)](#base-system-5-minute-wake-cycle)
   - [With PMS5003 Included](#with-pms5003-included)
-  - [With OLED Usage](#with-oled-usage-occasional-manual-activation)
+  - [With OLED Usage (occasional manual activation)](#with-oled-usage-occasional-manual-activation)
 - [☀️ Solar Power Summary](#-solar-power-summary)
   - [🔋 + ☀️ Battery Backup & Solar Requirements](#--battery-backup--solar-requirements)
 - [ESP32-C3 SuperMini GPIO Pinout Plan](#esp32-c3-supermini-gpio-pinout-plan)
+- [💤 Deep Sleep and Power Management](#-deep-sleep-and-power-management)
+  - [🔌 Devices Powered Down During Deep Sleep](#-devices-powered-down-during-deep-sleep)
+  - [🔓 Wake Lock Behavior](#-wake-lock-behavior)
+  - [👆 Display Button Behavior](#-display-button-behavior)
+  - [💤 Smart Sleep Behavior](#-smart-sleep-behavior)
+    - [Smart Sleep Timing](#smart-sleep-timing)
+    - [Preparing for Sleep](#preparing-for-sleep)
+    - [Smart PMS Control](#smart-pms-control)
 - [🧾 Bill of Materials (BOM Summary)](#-bill-of-materials-bom-summary)
   - [Microcontroller & Power](#microcontroller--power)
   - [Sensors](#sensors)
@@ -160,39 +173,176 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 
 ---
 
-### ESP32-C3 SuperMini GPIO Pinout Plan
+## ESP32-C3 SuperMini GPIO Pinout Plan
 
-| Purpose                      | GPIO   | Notes                                             |
-| ---------------------------- | ------ | ------------------------------------------------- |
-| **5V**                       | ----   | 5V Rail                                           |
-| **GND**                      | ----   | Ground Plane                                      |
-| **3V3**                      | ----   | 3.3V Rail                                         |
-| **I²C SDA (AHT20/BMP280)**   | GPIO4  | Shared I²C bus                                    |
-| **I²C SCL (AHT20/BMP280)**   | GPIO5  | Shared I²C bus                                    |
-| **1-Wire (DS18B20)**         | GPIO6  | Needs 4.7kΩ pull-up resistor                      |
-| **Sensor power switch**      | GPIO2  | MOSFET-controlled rail for sensors                |
-| **HC-SR04 Trigger**          | GPIO10 | -                                                 |
-| **HC-SR04 Echo**             | GPIO3  | -                                                 |
-| **PMS5003 TX → RX**          | GPIO21 | UART receive from PMS5003                         |
-| **PMS5003 RX ← TX**          | GPIO20 | UART send to PMS5003                              |
-| **PMS5003 SET (Sleep Ctrl)** | GPIO1  | Drive LOW to enter PMS sleep mode                 |
-| **TEMT6000 (Analog Out)**    | GPIO0  | Analog read (ADC1), safe and accessible           |
-| **OLED Power (MOSFET Gate)** | GPIO7  | Drives N-MOSFET to power OLED                     |
-| **OLED Button Input**        | GPIO9  | Safe as input only; must be HIGH or float at boot |
-| **UNUSED**                   | GPIO8  | Safe as input only; must be HIGH at reset         |
+| Purpose                        | GPIO   | Wire Color          | Notes                                             |
+| ------------------------------ | ------ | ------------------- | ------------------------------------------------- |
+| **5V**                         | ----   | Red                 | 5V Rail                                           |
+| **GND**                        | ----   | Black               | Ground Plane                                      |
+| **3V3**                        | ----   | Red w/ stripe       | 3.3V Rail                                         |
+| **I²C SDA (AHT20/BMP280)**     | GPIO4  | White               | Shared I²C bus                                    |
+| **I²C SCL (AHT20/BMP280)**     | GPIO5  | Yellow w/ stripe    | Shared I²C bus                                    |
+| **1-Wire (DS18B20)**           | GPIO6  | Blue /w stripe      | Needs 4.7kΩ pull-up resistor                      |
+| **Heater Power Switch**        | GPIO2  | Yellow              | Drives N-MOSFET to power heater                   |
+| **HC-SR04 Trigger**            | GPIO10 | Brown w/ stripe     | Fires Ultrasonic Output                           |
+| **HC-SR04 Echo**               | GPIO9  | White w/ stripe     | Receives Ultrasonic Input                         |
+| **PMS5003 TX → RX**            | GPIO21 | Yellow w/ 2 stripes | UART receive from PMS5003                         |
+| **PMS5003 RX ← TX**            | GPIO20 | Green w/ stripe     | UART send to PMS5003                              |
+| **PMS Power Switch**           | GPIO8  | White w/ 2 stripes  | Drives N-MOSFET to power PMS                      |
+| **TEMT6000 (Analog Out)**      | GPIO0  | Green               | Analog read (ADC1), safe and accessible           |
+| **OLED Power (MOSFET Gate)**   | GPIO7  | Brown               | Drives N-MOSFET to power OLED                     |
+| **OLED Button Input**          | GPIO1  | Blue                | Safe as input only; must be HIGH or float at boot |
+| **Sensor Power (MOSFET Gate)** | GPIO3  | Yellow              | Drives N-MOSFET to power I²C and Ultrasonic       |
+
+These color assignments are not electrically required but help reduce
+wiring mistakes during assembly.
 
 ---
 
-### 🧾 Bill of Materials (BOM Summary)
+## 💤 Deep Sleep and Power Management
 
-#### Microcontroller & Power
+The ESP32-C3 enters **deep sleep** between sensor readings to conserve energy.  
+In this state, the main processor halts and only the RTC (real-time clock)
+memory and wake-up timer remain powered.  
+This reduces current consumption to as low as **5µA**,
+making deep sleep essential for maintaining long battery life in
+solar-powered deployments.
+
+During deep sleep, most GPIO pins are inactive, and peripheral
+devices are unpowered unless explicitly designed to stay on.
+
+### 🔌 Devices Powered Down During Deep Sleep
+
+The following components are fully powered off
+while the ESP32-C3 is in deep sleep:
+
+- **SH1107 OLED Display**  
+  Powered via a GPIO-controlled MOSFET, only powers on with button press
+- **AHT20 + BMP280 Combo Sensor**  
+  On the I²C sensor power rail
+- **TMP102 Temperature Sensor**  
+  Shares the I²C power rail
+- **TEMT6000 Light Sensor**  
+  Powered via sensor rail, inactive during sleep
+- **HC-SR04 Ultrasonic Sensor**  
+  Powered by sensor rail, to avoid idle current
+- **PMS5003 Air Quality Sensor**  
+  Powered via a GPIO-controlled MOSFET
+- **DS18B20 Temperature Probe**  
+  Powered off via sensor rail
+- **PI Heating Element**  
+   Powered via a GPIO-controlled MOSFET, not energized except
+  during extreme cold during wakes
+- **Wi-Fi Radio**  
+  Disabled automatically in deep sleep mode
+
+Only the **battery-backed RTC** and **wake timer** remain active.
+
+### 🔓 Wake Lock Behavior
+
+A **wake lock** can temporarily prevent the ESP32-C3 from
+returning to deep sleep.  
+This mechanism is useful for debugging, testing, or when extended uptime
+is required (e.g. for screen visibility or serial logs).
+
+When a wake lock is active, the OLED display shows a clear full-screen message:
+
+```
+WAKE
+LOCK
+```
+
+This mode takes priority over the normal page-based display logic,
+ensuring the user is alerted whenever the wake lock is engaged.  
+The message uses a large font and occupies the full screen for visibility.
+
+### 👆 Display Button Behavior
+
+The OLED remains off by default and only lights up on button press.  
+It is automatically turned off after a brief timeout to preserve energy.
+
+### 💤 Smart Sleep Behavior
+
+The system uses a script-based approach to determine when and how long to enter
+deep sleep, with logic based on wake-lock state,
+battery voltage, and solar input.
+
+#### Wake Timing
+
+An initial delay of 30s occurs at the start of wake/boot
+when the PMS5003 is enabled.  
+This allows the PMS5003 to stabilize before taking readings.
+
+After the initial wake-up (or boot-up) the smart sleep script is executed.
+
+#### Smart Sleep Timing
+
+This script dynamically chooses a sleep duration
+based on current power conditions:
+
+- If `wake_hold_switch` is **on**,
+  the system logs the event and **skips sleep**.
+- Otherwise, it evaluates:
+  - If `force_long_sleep` is **on**,
+    the system enters **long sleep** (30 minutes).
+  - Else:
+    - If battery voltage is **above 3.7V**
+      and solar input is **above 50 mA**,
+      it chooses a **short sleep** duration (5 minutes).
+    - If not, it defaults to **long sleep** (30 minutes).
+- After setting the sleep duration,
+  the system **remains awake for a short time**
+  to allow sensors to stabilize before sleeping:
+  - If the PMS5003 air sensor is powered, it waits **30 seconds**.
+  - Otherwise, it waits **10 seconds**.
+- If wake-lock is **not active**,
+  the script initiates deep sleep after the delay.
+
+---
+
+#### Preparing for Sleep
+
+This script ensures all major components are powered down
+before entering deep sleep.
+
+Actions:
+
+- Logs the transition to sleep.
+- Powers off:
+  - OLED display
+  - PMS5003 sensor
+  - Shared sensor rail
+  - Internal heater
+- Delays 100ms for power-down settling.
+- Initiates deep sleep.
+
+---
+
+#### Smart PMS Control
+
+The PMS5003 is relatively power-hungry, so it is only powered on
+when conditions are favorable.  
+The PMS5003 uses ~80–100 mA when measuring and ~20–30 mA in its idle state.
+
+This script decides whether to power the PMS5003 sensor
+based on power availability.
+
+- If battery is **above 3.6V** or solar current is **above 20 mA**,
+  the PMS sensor is powered on.
+- Otherwise, it remains off to conserve energy.
+
+---
+
+## 🧾 Bill of Materials (BOM Summary)
+
+### Microcontroller & Power
 
 - 1× ESP32-C3 SuperMini
 - 1× CN3065 Solar Charging Module
 - 1× 3000mAh LiPo Battery
 - 1× 5V 200mA Solar Panel
 
-#### Sensors
+### Sensors
 
 - 1× AHT20 + BMP280 (combined I²C PCB)
 - 1× TMP102 (I²C internal temp)
@@ -202,12 +352,12 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 - 2× INA219 (voltage/current monitoring)
 - 1× PMS5003 (air quality sensor, optional)
 
-#### Display & Interface
+### Display & Interface
 
 - 1× SH1107 OLED Display (128x128 I²C)
 - 1× Momentary button (for OLED activation)
 
-#### Power Management
+### Power Management
 
 - 1× PI Heating Element (5V, 1W)
 - 3× STP55NF06L N-MOSFETs (OLED + Heater switching)
@@ -221,7 +371,7 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 - 1× 100nF Ceramic Capacitor (≥50V) – High-frequency filtering
   (ESP32 + sensor power rails)
 
-#### Optional Components
+### Optional Components
 
 - Assorted hookup wires (solid or stranded) for interconnections
 - Custom PCB or perfboard for permanent soldered assembly
@@ -234,7 +384,7 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
 
 ---
 
-#### Downloadable BOM Formats
+### Downloadable BOM Formats
 
 - [CSV](BOM/sensor_station_bom.csv)
 - [JSON](BOM/sensor_station_bom.json)
@@ -257,3 +407,7 @@ With 3000mAh LiPo and 5V 200mA Solar Panel
   power switches, UART, and buttons—was
   achieved using the ESP32-C3 SuperMini's onboard GPIOs,
   with **no GPIO expander required**.
+
+```
+
+```
