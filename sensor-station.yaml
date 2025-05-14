@@ -30,6 +30,29 @@ esp32:
   framework:
     type: arduino
 
+globals:
+  # Track cold boot vs sleep
+  - id: is_cold_boot
+    type: bool
+    restore_value: no
+    initial_value: "true"
+  # Track display page
+  - id: display_page
+    type: int
+    restore_value: no
+    initial_value: "0"
+  # Offset used to calculate water level
+  - id: pond_offset
+    type: float
+    restore_value: no
+    initial_value: !secret pond_offset
+
+  # The water depth of the pond
+  - id: pond_depth
+    type: float
+    restore_value: no
+    initial_value: !secret pond_depth
+
 # Single WiFi network with fast_connect
 wifi:
   ssid: !secret wifi_ssid
@@ -56,8 +79,16 @@ wifi:
 captive_portal:
 
 # INFO: Enable to use web server function
+# may impact performance, doesn't work during sleep
 #
 # web_server:
+#
+# INFO: The auth for the web server is also optional
+# Leave commented to require no user/password
+#
+#   auth:
+#     username: !secret web_server_user
+#     password: !secret web_server_password
 
 # Enable logging for troubleshooting
 logger:
@@ -107,6 +138,7 @@ sensor:
     pin: GPIO0
     name: "Ambient Light"
     id: ambient_light
+    icon: mdi:weather-sunny
     device_class: illuminance
     unit_of_measurement: lx
     filters:
@@ -118,9 +150,11 @@ sensor:
     temperature:
       name: "Ambient Temperature"
       id: ambient_temp
+      icon: mdi:thermometer
     humidity:
       name: "Ambient Humidity"
       id: ambient_humidity
+      icon: mdi:water-percent
     update_interval: 5s
 
   # BMP280 atmospheric pressure sensor
@@ -131,52 +165,69 @@ sensor:
     pressure:
       name: "Atmospheric Pressure"
       id: atmospheric_pressure
-    address: 0x77 # Verify sensor address
+      icon: mdi:gauge
+    address: !secret bmp280_address
     update_interval: 5s
 
   # TMP102 internal enclosure temperature sensor
   - platform: tmp102
     name: "Enclosure Internal Temp"
     id: enclosure_temp
-    address: 0x48 # Verify sensor address
+    address: !secret tmp102_address
     update_interval: 5s
+    icon: mdi:thermometer
 
   # DS18B20 pond water temperature sensor
   - platform: dallas_temp
-    address: 0xdd0000000589bc28
+    address: !secret ds18B20_address
     name: "Pond Water Temperature"
     id: pond_temp
     update_interval: 5s
+    icon: mdi:waves
 
   # INA219 voltage/current sensors
   # Solar Power Supply
   - platform: ina219
-    address: 0x44
+    address: !secret ina219_solar_address
     shunt_resistance: 0.1 ohm
     current:
       name: "Solar Current"
       id: solar_current
+      icon: mdi:solar-power
     power:
       name: "Solar Power"
       id: solar_power
+      icon: mdi:solar-power
     bus_voltage:
       name: "Solar Voltage"
       id: solar_voltage
+      icon: mdi:solar-power
+    shunt_voltage:
+      name: "Solar Shunt Voltage"
+      id: solar_shunt_voltage
+      icon: mdi:solar-power
     update_interval: 5s
 
     # Battery Power Supply/Charging
   - platform: ina219
-    address: 0x40
+    address: !secret ina219_batt_address
     shunt_resistance: 0.1 ohm
     current:
       name: "Battery Current"
       id: batt_current
-    bus_voltage:
-      name: Battery Voltage
-      id: batt_voltage
+      icon: mdi:car-battery
     power:
       name: "Battery Power"
       id: batt_power
+      icon: mdi:car-battery
+    bus_voltage:
+      name: Battery Voltage
+      id: batt_voltage
+      icon: mdi:car-battery
+    shunt_voltage:
+      name: "Battery Shunt Voltage"
+      id: battery_shunt_voltage
+      icon: mdi:car-battery
     update_interval: 5s
 
   # PMS5003 Particulate Matter Sensor
@@ -185,12 +236,15 @@ sensor:
     pm_1_0:
       name: "PM1.0"
       id: pm_1_0
+      icon: mdi:blur
     pm_2_5:
       name: "PM2.5"
       id: pm_2_5
+      icon: mdi:blur
     pm_10_0:
       name: "PM10.0"
       id: pm_10_0
+      icon: mdi:blur
     update_interval: 120s
     id: pms_sensor
 
@@ -198,10 +252,11 @@ sensor:
   - platform: ultrasonic
     trigger_pin: GPIO10
     echo_pin:
-      number: GPIO9 # WARN: Swap this from GPIO3
+      number: GPIO9
       ignore_strapping_warning: true
     name: "Water Level Distance"
     id: water_distance
+    icon: mdi:arrow-expand-vertical
     update_interval: 1s
     filters:
       - sliding_window_moving_average:
@@ -210,19 +265,34 @@ sensor:
 
   # Calculate actual water level
   - platform: template
-    name: "Actual Water Level"
+    name: "Pond Water Height"
+    icon: mdi:waves-arrow-up
     id: pond_level
-    # FIXME: Set this to the distance from the sensor to water level at zero (in cm)
-    lambda: |-
-      const float sensor_height_cm = 100.0;  // in cm
-      return sensor_height_cm - (id(water_distance).state * 100.0);
     unit_of_measurement: "cm"
     update_interval: 5s
+    lambda: |-
+      float distance_cm = id(water_distance).state * 100.0;
+      float level = id(pond_offset) + id(pond_depth) - distance_cm;
+      return level > 0.0 ? level : 0.0;
+
+  # Pond water percent full
+  - platform: template
+    name: "Pond Fill Level"
+    id: pond_level_percent
+    icon: mdi:waves-arrow-up
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    lambda: |-
+      float distance_cm = id(water_distance).state * 100.0;
+      float level = id(pond_offset) + id(pond_depth) - distance_cm;
+      level = level > 0.0 ? level : 0.0;
+      return (level / id(pond_depth)) * 100.0;
 
     # Template to calculate battery charge percentage
   - platform: template
     name: "Battery Percentage"
     id: batt_percent
+    icon: mdi:battery-high
     unit_of_measurement: "%"
     device_class: battery
     update_interval: 5s
@@ -237,27 +307,30 @@ sensor:
   - platform: template
     name: "Estimated Total Power Use"
     id: total_power_use
+    icon: mdi:flash-outline
     unit_of_measurement: "W"
     accuracy_decimals: 2
     update_interval: 5s
     lambda: |-
-      return (id(solar_voltage).state * id(solar_current).state) -
+      return (id(solar_voltage).state * id(solar_current).state) +
             (id(batt_voltage).state * id(batt_current).state);
 
   # Template to calculate System Current (in amps)
   - platform: template
     name: "Estimated Total Current Use"
     id: total_current_use
+    icon: mdi:current-dc
     unit_of_measurement: "A"
     accuracy_decimals: 3
     update_interval: 5s
     lambda: |-
-      return id(solar_current).state - id(batt_current).state;
+      return id(solar_current).state + id(batt_current).state;
 
   # Daily total energy usage (resets every day)
   - platform: total_daily_energy
     name: "Total Energy Used Today"
     id: total_energy_today
+    icon: mdi:counter
     power_id: total_power_use
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
@@ -267,6 +340,7 @@ sensor:
   - platform: total_daily_energy
     name: "Total Current Today"
     id: total_current_today
+    icon: mdi:counter
     power_id: total_current_use
     unit_of_measurement: "Ah"
     accuracy_decimals: 3
@@ -286,6 +360,7 @@ sensor:
   - platform: integration
     name: "Total Current Used (All-Time)"
     id: total_current_all_time
+    icon: mdi:counter
     sensor: total_current_use
     time_unit: h
     unit_of_measurement: "Ah"
@@ -296,6 +371,7 @@ sensor:
   - platform: total_daily_energy
     name: "Solar Energy Collected Today"
     id: total_solar_today
+    icon: mdi:white-balance-sunny
     power_id: solar_power
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
@@ -305,6 +381,7 @@ sensor:
   - platform: total_daily_energy
     name: "Solar Current Today"
     id: solar_current_today
+    icon: mdi:counter
     power_id: solar_current
     unit_of_measurement: "Ah"
     accuracy_decimals: 3
@@ -314,6 +391,7 @@ sensor:
   - platform: integration
     name: "Solar Energy Collected (All-Time)"
     id: total_solar_all_time
+    icon: mdi:solar-panel
     sensor: solar_power
     time_unit: h
     unit_of_measurement: "Wh"
@@ -324,6 +402,7 @@ sensor:
   - platform: integration
     name: "Solar Current (All-Time)"
     id: solar_current_all_time
+    icon: mdi:counter
     sensor: solar_current
     time_unit: h
     unit_of_measurement: "Ah"
@@ -334,6 +413,7 @@ sensor:
   - platform: wifi_signal
     name: "WiFi Signal dB"
     id: wifi_signal_db
+    icon: mdi:wifi
     update_interval: 60s
     entity_category: "diagnostic"
 
@@ -341,6 +421,7 @@ sensor:
   - platform: copy
     source_id: wifi_signal_db
     name: "WiFi Signal Percent"
+    icon: mdi:wifi-strength-4
     id: wifi_signal_percent
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
@@ -348,13 +429,42 @@ sensor:
     entity_category: "diagnostic"
     device_class: ""
 
+  - platform: template
+    name: "Battery Is Charging"
+    id: battery_is_charging
+    device_class: power
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(batt_current).has_state()) {
+        return {};
+      }
+      return (bool)(id(batt_current).state > 0);
+    icon: mdi:battery-plus
+    update_interval: 10s
+
+text_sensor:
+  - platform: template
+    name: "Battery Charging State"
+    id: battery_charging_state
+    entity_category: diagnostic
+    lambda: |-
+      if (!id(batt_current).has_state()) return {};
+      float current = id(batt_current).state;
+      if (current > 0) return std::string("charging");
+      if (current < 0) return std::string("discharging");
+      return std::string("idle");
+    update_interval: 10s
+    icon: "mdi:battery-arrow-up-down"
+
 switch:
   # Virtual switch to enable wake-lock (for OTA updates)
   - platform: template
     id: wake_hold_switch
     name: "Wake-Lock"
+    icon: mdi:power-sleep
     restore_mode: ALWAYS_ON
     optimistic: true
+    entity_category: config
     turn_on_action:
       - logger.log: "Wake-Lock ON → Preventing deep sleep"
       - deep_sleep.prevent: deep_sleep_control
@@ -368,6 +478,7 @@ switch:
       number: GPIO8 # FIXME: <---- Add MOSfet for power control
       ignore_strapping_warning: true
     id: pms_power
+    icon: mdi:weather-hazy
     name: "PMS Sensor Power"
 
     # Heater control via GPIO2 through MOSFET
@@ -376,38 +487,46 @@ switch:
       number: GPIO2 # FIXME: <---- Add MOSfet for power control
       ignore_strapping_warning: true
     name: "Internal Heater"
+    icon: mdi:radiator
     id: internal_heater
+    entity_category: diagnostic
+    internal: true # Hides from Home Assistant
 
     # Sensor power rail MOSFET
-    # WARN: This pin is swapped with ultrasonic echo GPIO9
   - platform: gpio
     pin:
       number: GPIO3 # FIXME: <---- Add MOSfet for power control
     id: sensor_power
+    icon: mdi:access-point
     name: "Sensor Power Rail"
 
     # OLED power via GPIO7 through MOSFET
   - platform: gpio
     pin: GPIO7 # FIXME: <---- Add MOSfet for power control
     id: oled_power
+    icon: mdi:monitor-shimmer
+    name: "Display Power"
 
-  # Switch to control smart sleep duration
+  # Switch to force long sleep duration
   - platform: template
     id: force_long_sleep
+    icon: mdi:timer-sand
     name: "Force Long Sleep"
     restore_mode: RESTORE_DEFAULT_OFF
     entity_category: config
     optimistic: true
 
+  # Switch to force short sleep duration
   - platform: template
     name: "Force Short Sleep"
     id: force_short_sleep
+    icon: mdi:timer-outline
     optimistic: true
     entity_category: config
     restore_mode: RESTORE_DEFAULT_OFF
 
 time:
-  # Sleep timer
+  # Clock time sourcing
   - platform: homeassistant
     id: ha_time
     on_time:
@@ -497,7 +616,6 @@ script:
       - switch.turn_off: internal_heater
 
 # Automatic heater activation based on internal temp
-
 climate:
   - platform: thermostat
     name: "Enclosure Heater Control"
@@ -538,17 +656,6 @@ climate:
       - switch.turn_off: internal_heater
 
 #   ─────────────────────────────── DISPLAY ─────────────────────────────
-
-# Track display page
-globals:
-  - id: is_cold_boot
-    type: bool
-    restore_value: no
-    initial_value: "true"
-  - id: display_page
-    type: int
-    restore_value: no
-    initial_value: "0"
 
 # Display page turn interval
 interval:
