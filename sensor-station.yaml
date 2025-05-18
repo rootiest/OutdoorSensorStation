@@ -2,11 +2,11 @@
 
 esphome:
   project:
-    name: "outdoor.sensor_station"
+    name: "outdoor.sensor-station"
     version: "1.0.0"
   name: sensor-station
   friendly_name: Sensor Station
-  area: outside
+  area: Outside
   on_boot:
     then:
       - logger.log: "Booting, powering sensors"
@@ -53,11 +53,17 @@ globals:
     restore_value: no
     initial_value: !secret pond_depth
 
+  # Extra wake time
+  - id: extra_awake_time_sec
+    type: int
+    restore_value: no
+    initial_value: !secret additional_awake_time
+
 # Single WiFi network with fast_connect
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  fast_connect: true
+  # fast_connect: true
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Sensor-Station"
@@ -96,8 +102,18 @@ logger:
 
 # Enable Home Assistant API
 api:
+  reboot_timeout: 0s
   encryption:
     key: !secret api_encryption_key
+
+# Enable MQTT API
+mqtt:
+  broker: !secret mqtt_broker
+  port: 1883
+  username: !secret mqtt_user
+  password: !secret mqtt_password
+  reboot_timeout: 0s
+  keepalive: 30s
 
 # Enable OTA updates
 ota:
@@ -120,10 +136,10 @@ i2c:
 one_wire:
   - platform: gpio
     pin:
-      number: GPIO6 # FIXME: <---- Add pull-up resistor
-      mode: # FIXME: <---- Remove when pull-up resistor added
-        input: true
-        pullup: true
+      number: GPIO6 #  FIXME: <---- Add pull-up resistor
+      mode: #          FIXME: <---- Remove when pull-up resistor added
+        input: true #  FIXME: <---- Remove when pull-up resistor added
+        pullup: true # FIXME: <---- Remove when pull-up resistor added
 
 # UART for PMS5003 air quality sensor
 uart:
@@ -162,12 +178,45 @@ sensor:
     temperature:
       name: "BMP280 Temperature" # Secondary temp reading
       id: bmp280_temp
+      icon: mdi:thermometer
+      entity_category: "diagnostic"
     pressure:
       name: "Atmospheric Pressure"
       id: atmospheric_pressure
       icon: mdi:gauge
     address: !secret bmp280_address
     update_interval: 5s
+
+  # Average of AHT20 and BMP280 Temperatures
+  #   (weighted 75% towards AHT20)
+  - platform: template
+    name: "Ambient Temperature (Avg)"
+    id: ambient_temp_avg
+    unit_of_measurement: "°C"
+    device_class: temperature
+    icon: mdi:thermometer
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: |-
+      float aht = id(ambient_temp).state;
+      float bmp = id(bmp280_temp).state;
+
+      bool aht_valid = !isnan(aht) && aht > -40 && aht < 85;
+      bool bmp_valid = !isnan(bmp) && bmp > -40 && bmp < 85;
+
+      if (aht_valid && bmp_valid) {
+      // Weighted Average: 75% AHT20, 25% BMP280
+        return (0.75 * aht) + (0.25 * bmp);
+      } else if (aht_valid) {
+        // Only AHT20 is valid
+        return aht;
+      } else if (bmp_valid) {
+        // Only BMP280 is valid
+        return bmp;
+      } else {
+        // Neither is valid
+        return NAN;
+      }
 
   # TMP102 internal enclosure temperature sensor
   - platform: tmp102
@@ -194,6 +243,7 @@ sensor:
       name: "Solar Current"
       id: solar_current
       icon: mdi:solar-power
+      entity_category: "diagnostic"
     power:
       name: "Solar Power"
       id: solar_power
@@ -202,10 +252,12 @@ sensor:
       name: "Solar Voltage"
       id: solar_voltage
       icon: mdi:solar-power
+      entity_category: "diagnostic"
     shunt_voltage:
       name: "Solar Shunt Voltage"
       id: solar_shunt_voltage
       icon: mdi:solar-power
+      entity_category: "diagnostic"
     update_interval: 5s
 
     # Battery Power Supply/Charging
@@ -216,6 +268,7 @@ sensor:
       name: "Battery Current"
       id: batt_current
       icon: mdi:car-battery
+      entity_category: "diagnostic"
     power:
       name: "Battery Power"
       id: batt_power
@@ -224,10 +277,12 @@ sensor:
       name: Battery Voltage
       id: batt_voltage
       icon: mdi:car-battery
+      entity_category: "diagnostic"
     shunt_voltage:
       name: "Battery Shunt Voltage"
       id: battery_shunt_voltage
       icon: mdi:car-battery
+      entity_category: "diagnostic"
     update_interval: 5s
 
   # PMS5003 Particulate Matter Sensor
@@ -257,11 +312,23 @@ sensor:
     name: "Water Level Distance"
     id: water_distance
     icon: mdi:arrow-expand-vertical
+    entity_category: "diagnostic"
+    update_interval: 1s
+
+  - platform: template
+    name: "Smoothed Water Distance"
+    id: water_distance_avg
+    icon: mdi:arrow-expand-vertical
+    unit_of_measurement: "cm"
+    entity_category: "diagnostic"
+    accuracy_decimals: 1
+    lambda: |-
+      return id(water_distance).state;
     update_interval: 1s
     filters:
       - sliding_window_moving_average:
           window_size: 30
-          send_every: 30
+          send_every: 1
 
   # Calculate actual water level
   - platform: template
@@ -269,9 +336,9 @@ sensor:
     icon: mdi:waves-arrow-up
     id: pond_level
     unit_of_measurement: "cm"
-    update_interval: 5s
+    update_interval: 30s
     lambda: |-
-      float distance_cm = id(water_distance).state * 100.0;
+      float distance_cm = id(water_distance_avg).state * 100.0;
       float level = id(pond_offset) + id(pond_depth) - distance_cm;
       return level > 0.0 ? level : 0.0;
 
@@ -282,8 +349,9 @@ sensor:
     icon: mdi:waves-arrow-up
     unit_of_measurement: "%"
     accuracy_decimals: 1
+    update_interval: 30s
     lambda: |-
-      float distance_cm = id(water_distance).state * 100.0;
+      float distance_cm = id(water_distance_avg).state * 100.0;
       float level = id(pond_offset) + id(pond_depth) - distance_cm;
       level = level > 0.0 ? level : 0.0;
       return (level / id(pond_depth)) * 100.0;
@@ -305,52 +373,56 @@ sensor:
 
   # Template to calculate System Power
   - platform: template
-    name: "Estimated Total Power Use"
-    id: total_power_use
+    name: "System Power Use"
+    id: system_power_use
     icon: mdi:flash-outline
     unit_of_measurement: "W"
+    device_class: power
     accuracy_decimals: 2
     update_interval: 5s
     lambda: |-
-      return (id(solar_voltage).state * id(solar_current).state) +
+      return (id(solar_voltage).state * id(solar_current).state) -
             (id(batt_voltage).state * id(batt_current).state);
 
   # Template to calculate System Current (in amps)
   - platform: template
-    name: "Estimated Total Current Use"
-    id: total_current_use
+    name: "System Current Use"
+    id: system_current_use
+    entity_category: "diagnostic"
+    device_class: current
     icon: mdi:current-dc
     unit_of_measurement: "A"
     accuracy_decimals: 3
     update_interval: 5s
     lambda: |-
-      return id(solar_current).state + id(batt_current).state;
+      return id(solar_current).state - id(batt_current).state;
 
   # Daily total energy usage (resets every day)
   - platform: total_daily_energy
-    name: "Total Energy Used Today"
+    name: "System Energy Used Today"
     id: total_energy_today
     icon: mdi:counter
-    power_id: total_power_use
+    power_id: system_power_use
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
     restore: true
 
   # Daily total current useage (resets every day)
   - platform: total_daily_energy
-    name: "Total Current Today"
+    name: "System Current Today"
     id: total_current_today
+    entity_category: "diagnostic"
     icon: mdi:counter
-    power_id: total_current_use
+    power_id: system_current_use
     unit_of_measurement: "Ah"
     accuracy_decimals: 3
     restore: true
 
   # Lifetime total energy usage (never resets)
   - platform: integration
-    name: "Total Energy Used (All-Time)"
+    name: "System Energy Used (All-Time)"
     id: total_energy_all_time
-    sensor: total_power_use
+    sensor: system_power_use
     time_unit: h
     unit_of_measurement: "Wh"
     accuracy_decimals: 2
@@ -358,10 +430,11 @@ sensor:
 
   # Lifetime total current usage (never resets)
   - platform: integration
-    name: "Total Current Used (All-Time)"
+    name: "System Current Used (All-Time)"
     id: total_current_all_time
+    entity_category: "diagnostic"
     icon: mdi:counter
-    sensor: total_current_use
+    sensor: system_current_use
     time_unit: h
     unit_of_measurement: "Ah"
     accuracy_decimals: 3
@@ -381,6 +454,7 @@ sensor:
   - platform: total_daily_energy
     name: "Solar Current Today"
     id: solar_current_today
+    entity_category: "diagnostic"
     icon: mdi:counter
     power_id: solar_current
     unit_of_measurement: "Ah"
@@ -402,6 +476,7 @@ sensor:
   - platform: integration
     name: "Solar Current (All-Time)"
     id: solar_current_all_time
+    entity_category: "diagnostic"
     icon: mdi:counter
     sensor: solar_current
     time_unit: h
@@ -413,6 +488,7 @@ sensor:
   - platform: wifi_signal
     name: "WiFi Signal dB"
     id: wifi_signal_db
+    device_class: signal_strength
     icon: mdi:wifi
     update_interval: 60s
     entity_category: "diagnostic"
@@ -480,6 +556,7 @@ switch:
     id: pms_power
     icon: mdi:weather-hazy
     name: "PMS Sensor Power"
+    restore_mode: RESTORE_DEFAULT_OFF
 
     # Heater control via GPIO2 through MOSFET
   - platform: gpio
@@ -499,13 +576,16 @@ switch:
     id: sensor_power
     icon: mdi:access-point
     name: "Sensor Power Rail"
+    restore_mode: RESTORE_DEFAULT_ON
 
     # OLED power via GPIO7 through MOSFET
   - platform: gpio
-    pin: GPIO7 # FIXME: <---- Add MOSfet for power control
+    pin:
+      number: GPIO7 # FIXME: <---- Add MOSfet for power control
     id: oled_power
     icon: mdi:monitor-shimmer
     name: "Display Power"
+    restore_mode: RESTORE_DEFAULT_OFF
 
   # Switch to force long sleep duration
   - platform: template
@@ -564,16 +644,19 @@ script:
               id(deep_sleep_control).set_sleep_duration(30 * 60 * 1000);
             }
           }
-      # Start the deep sleep timer if wake-lock is off
       - if:
           condition:
             switch.is_on: pms_power
           then:
-            - logger.log: "Extending wake time to 30 seconds (PMS active)"
-            - delay: 30s
+            - logger.log: "Extending wake time for PMS warm-up (30s)"
+            - delay: !lambda |-
+                return (30 + id(extra_awake_time_sec)) * 1000;
           else:
-            - logger.log: "Wake time set to 15 seconds (no PMS)"
-            - delay: 15s
+            - logger.log: "Base wake time set to 15 seconds"
+            - delay: !lambda |-
+                return (15 + id(extra_awake_time_sec)) * 1000;
+      # Brief delay to ensure MQTT/API update
+      - delay: 2000ms
       - script.execute: prepare_for_sleep
 
   # Deep sleep preparation
@@ -586,11 +669,18 @@ script:
               switch.is_on: wake_hold_switch
           then:
             - logger.log: "Preparing for deep sleep"
+            # Clear the OLED screen manually
+            - lambda: |-
+                id(oled_display).fill(COLOR_OFF);
+                id(oled_display).update();
+            - delay: 2000ms
+            # Power down
             - switch.turn_off: oled_power
             - switch.turn_off: pms_power
             - switch.turn_off: sensor_power
             - switch.turn_off: internal_heater
             - delay: 100ms
+            # Enter deep sleep
             - deep_sleep.enter: deep_sleep_control
 
     # Enable PMS5003 if battery level is sufficient
@@ -788,7 +878,7 @@ font:
 binary_sensor:
   - platform: gpio
     pin:
-      number: GPIO1 # FIXME: <---- Add button for display activation
+      number: GPIO1 #  FIXME: <---- Add button for display activation
       inverted: true # FIXME: <---- Add pull-up resistor for strapping safety
       mode:
         input: true
@@ -804,11 +894,13 @@ binary_sensor:
 # Display configuration
 display:
   - platform: ssd1306_i2c
+    id: oled_display
     model: "SH1107 128x128"
     address: 0x3C
     rotation: 180
     update_interval: 2s
     # FIXME: Uncomment the wake_hold if statement to enable WAKE-LOCK display
+    #        This was commented out for debugging reasons
     lambda: |-
       //if (id(wake_hold_switch).state) {
       //  it.printf(32, 34, id(font_large), "WAKE");
@@ -822,7 +914,7 @@ display:
         it.printf(0, 50, id(font_small), "WiFi: %.0f%%", id(wifi_signal_percent).state);
         it.printf(0, 64, id(font_small), "Batt: %.0f%%", id(batt_percent).state);
         it.printf(0, 78, id(font_small), "Solar: %.1fW", id(solar_power).state);
-        it.printf(0, 92, id(font_small), "Load: %.1fW", id(total_power_use).state);
+        it.printf(0, 92, id(font_small), "Load: %.1fW", id(system_power_use).state);
         it.printf(0, 106, id(font_small), "Ibat: %.1fmA", id(batt_current).state * 1000);
       } else {
         it.printf(0, 8,  id(font_small), "Light: %.0flx", id(ambient_light).state);
